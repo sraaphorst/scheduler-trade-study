@@ -6,20 +6,23 @@
 from common import *
 from math import ceil
 from time_units import *
+import astropy.units as u
+from astropy.time import Time as ATime
 from astropy.table import Table
 from ilp_solver import *
 
 
 def read_tables(observation_table: str,
+                time_table: str,
                 target_table_metric_visibility: str,
                 target_table_metric_visibility_hour_angle: str,
-                granularity: Time):
+                granularity: Time) -> (TimeSlots, List[Observation]):
     obstab = Table.read(observation_table)
+    timetab = Table.read(time_table)
     targtab_metvis = Table.read(target_table_metric_visibility)
     targtab_metvisha = Table.read(target_table_metric_visibility_hour_angle)
 
     # Get the obs_id of the observations we are considering.
-    # TODO: 327 unique observations
     obs_ids = [row['obs_id'] for row in obstab]
 
     # Get the fixed priorities for the observations. These are 0 or a fixed constant.
@@ -60,8 +63,12 @@ def read_tables(observation_table: str,
     # start_slot_priorities[obs_id][time_slot_idx] = time_slot_priority
     start_slot_priorities = {obs_id: {id: all_slot_priorities[obs_id][id] for id in start_slots[obs_id]} for obs_id in obs_ids}
 
-    # Create the timeslots: there should be 173, each of 3 minutes.
-    timeslots = TimeSlots(Time(3), 173)
+    # Create the time slots: there should be 173, each of 3 minutes.
+    time_strings = timetab['time']
+    granularity = Time(int((ATime(time_strings[1]) - ATime(time_strings[0])).to('minute').round(2).to_value()),
+                       unit=TimeUnits.minutes)
+    num_time_slots = len(targtab_metvis[0]['weight'])
+    time_slots = TimeSlots(granularity, num_time_slots)
 
     # Create the observations.
     observations = []
@@ -76,12 +83,6 @@ def read_tables(observation_table: str,
                                       start_slot_priorities[obs_id],
                                       priorities[obs_id])
             observations.append(observation)
-
-    #print_observations(obs, timeslots)
-
-    # Run the solver.
-    final_schedule, final_score = schedule(timeslots, observations)
-    print(final_schedule)
-    #print_schedule(timeslots, obs, final_schedule, final_score)
-
+    print(f"GRAN: {granularity}")
+    return time_slots, observations
 

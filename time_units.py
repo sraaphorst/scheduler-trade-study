@@ -1,7 +1,7 @@
 # time_units.py
 # By Sebastian Raaphorst, 2020.
 
-# Time units for python.
+# Time and time units for python.
 from enum import IntEnum
 from typing import Callable
 
