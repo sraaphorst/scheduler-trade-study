@@ -86,3 +86,5 @@ class Time:
     def __setattr__(self, key, value):
         raise NotImplementedError
 
+    def mins(self) -> Quantity:
+        return self.to_unit(TimeUnits.minutes)
