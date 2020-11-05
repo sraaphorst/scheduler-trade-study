@@ -79,7 +79,7 @@ class Time:
     def __mul__(self, factor: int):
         return Time(self.quantity * factor, self.unit)
 
-    # TODO: Do we want 180s to hash to the same value as 3m? If so, just return ns.
+    #  TODO Sebastian: Do we want 180 s to hash to the same value as 3 mins? If so, just return ns here.
     def __hash__(self):
         return hash((self.quantity, self.unit))
 

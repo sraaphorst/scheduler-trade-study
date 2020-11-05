@@ -1,10 +1,12 @@
+# __init__.py
+# By Sebastian Raaphorst, 2020.
+
 from common import *
 from math import ceil
 from random import choice, randrange, seed, sample
 from copy import copy
 from typing import List, Tuple, Union
 import numpy as np
-from input_parser import read_tables
 
 # A Chromosome maintains a Schedule as defined in common, i.e. a list where the contents of position x are the obs_id
 # of the observation scheduled for time_slot x, and None if nothing is scheduled.
@@ -168,7 +170,6 @@ class GeneticAlgortihm:
                                                              reverse=True)]
 
         for obs_idx in sorted_obs_idx_by_score:
-            print(f"Inserting {obs_idx}")
             obs = self.observations[obs_idx]
 
             # Determine the sites in which it should be scheduled.
@@ -411,95 +412,3 @@ class GeneticAlgortihm:
                 best_c_gs = best
 
         return best_c_gn, best_c_gs
-
-
-if __name__ == '__main__':
-    time_slots, observations = read_tables('obstab.fits',
-                                           'timetab.fits',
-                                           'targtab_metvis.fits',
-                                           'targtab_metvisha.fits')
-
-    ga = GeneticAlgortihm(time_slots, observations)
-    c_gn, c_gs = ga.run()
-    if c_gn is not None:
-        print(f"GN fitness: {c_gn.determine_fitness() / 519}")
-        print(f"GN: {c_gn.schedule}")
-        print(f"GN: {c_gn.scheduling}")
-    if c_gs is not None:
-        print(f"GS fitness: {c_gs.determine_fitness() / 519}")
-        print(f"GS: {c_gs.schedule}")
-        print(f"GS: {c_gs.scheduling}")
-
-
-
-
-    # granularity = 3
-    #
-    # obstab = Table.read('obstab.fits')
-    # targtab_metvis = Table.read('targtab_metvis.fits')
-    # targtab_metvisha = Table.read('targtab_metvisha.fits')
-    #
-    # # Get the obs_id of the observations we are considering.
-    # all_obs_ids = [row['obs_id'] for row in obstab]
-    #
-    # # Get the fixed priorities for the observations. These are 0 or a fixed constant.
-    # # If they are 0, do not include them and filter them out.
-    # # If they are a fixed constant, include them.
-    # fixed_priority_list = {obs_id: list(enumerate(row['weight'])) for obs_id in all_obs_ids for row in targtab_metvis if
-    #                        row['id'] == obs_id if max(row['weight'] > 0)}
-    #
-    # # List of observation IDs that are active.
-    # obs_ids = []
-    #
-    # # fixed_properties[obs_id] = fixed property
-    # fixed_priorities = {}
-    #
-    # interpolated_timeslot_priorities = {}
-    #
-    # obs_lengths = {row['obs_id']: (row['tot_time'] - row['obs_time']) * 60 for row in obstab}
-    # observations = []
-    # obs_idx = 0
-    # for obs_id in all_obs_ids:
-    #     # Get the list of fixed priorities for obs_id. This gives us the fixed priority and the time periods for which
-    #     # this observation is schedulable.
-    #     fixed_priority_lists = [list(enumerate(row['weight'])) for row in targtab_metvis if row['id'] == obs_id if
-    #                             max(row['weight']) > 0]
-    #     if len(fixed_priority_lists) == 0:
-    #         continue
-    #     fixed_priority_list = fixed_priority_lists[0]
-    #     if len(fixed_priority_list) == 0:
-    #         continue
-    #
-    #     obs_ids.append(obs_id)
-    #
-    #     # Get the indices of the earliest nonzero and the last nonzero entries.
-    #     filtered_priority_list = [(idx, val) for (idx, val) in fixed_priority_list if val > 0]
-    #     minval, maxval = filtered_priority_list[0][0], filtered_priority_list[-1][0]
-    #
-    #     fixed_priorities[obs_id] = filtered_priority_list[0][1]
-    #
-    #     # Now we process the actual timeslots. Get the metric score for each timeslot for this observation.
-    #     timeslot_priorities = [row['weight'] for row in targtab_metvisha if row['id'] == obs_id][0][minval:maxval + 1]
-    #     interpolated_timeslot_priorities[obs_id] = np.interp(range(3 * minval, 3 * maxval + 1),
-    #                                                          range(3 * minval, 3 * maxval + 1, 3), timeslot_priorities)
-    #
-    #     # observations.append(obs_id, Resource.GS, obs_lengths[obs_id], 3 * minval, 3 * maxval + 1 - obs_lengths[obs_id],
-    #     #                      fixed_priorities[obs_id], interpolated_timeslot_priorities[obs_id])
-    #
-    # seed(time.time())
-    #
-    # # Run the genetic algorithm.
-    # print(f"*** RUNNING ALGORITHM for {observations.num_obs} observations ***")
-    # start_time = time.monotonic()
-    # ga = GeneticAlgorithm(observations)
-    # c_gn, c_gs = ga.run(DEFAULT_NUM_ITERATIONS)
-    # end_time = time.monotonic()
-    # print('\n\n*** RESULTS ***')
-    # print(c_gn)
-    # if c_gn is not None:
-    #     print(c_gn.detailed_string("Gemini North:"))
-    # print()
-    # print(c_gs)
-    # if c_gs is not None:
-    #     print(c_gs.detailed_string("Gemini South:"))
-    # print(f"Time: {end_time - start_time} s")

@@ -8,7 +8,7 @@
 # For genetic algorithms, it was one minute.
 
 from enum import IntEnum
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Tuple
 from time_units import Time
 
 # The schedule consists of a list corresponding between timeslot indices and observation indices, or None
@@ -22,6 +22,8 @@ from time_units import Time
 # >>> schedule[5:9] = 1, i.e. observation 1 is scheduled for timeslots 5, 6, 7, 8.
 # >>> schedule[9:10] = None, i.e. no observations are scheduled for timeslots 10.
 Schedule = List[Union[int, None]]
+
+Scheduling = List[Tuple[int, int]]
 
 # The final score of the schedule.
 Score = float
@@ -179,9 +181,9 @@ class Observation:
                  priority: Metric):
         self.name = name
         self.idx = Observation.counter
-        Observation.counter += 1
         self.site = site
         self.band = band
         self.obs_time = obs_time
         self.start_slot_map = start_slot_map
         self.priority = priority
+        Observation.counter += 1
