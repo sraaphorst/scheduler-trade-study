@@ -76,6 +76,9 @@ class Time:
     def __sub__(self, other):
         return self._op(other, lambda x, y: x - y)
 
+    def __mul__(self, factor: int):
+        return Time(self.quantity * factor, self.unit)
+
     # TODO: Do we want 180s to hash to the same value as 3m? If so, just return ns.
     def __hash__(self):
         return hash((self.quantity, self.unit))

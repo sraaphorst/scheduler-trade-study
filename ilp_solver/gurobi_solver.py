@@ -39,35 +39,34 @@ def schedule(time_slots: TimeSlots, observations: List[Observation]) -> Tuple[Sc
     # Create the decision variables, Y_is: observation i can start in start slot s.
     y = []
     for obs in observations:
-        yo = {ss.timeslot_idx: solver.addVar(vtype=GRB.BINARY, name=('y_%d_%d' % (obs.idx, ss.timeslot_idx)))
-              for ss in obs.start_slots}
+        yo = {start_slot_idx: solver.addVar(vtype=GRB.BINARY, name=('y_%d_%d' % (obs.idx, start_slot_idx)))
+              for start_slot_idx in obs.start_slot_map}
         y.append(yo)
         solver.update()
 
     # *** CONSTRAINT TYPE 1: Checked ***
     # First, no observation should be scheduled for more than one start.
     for obs in observations:
-        expression = sum(y[obs.idx][ss.timeslot_idx] for ss in obs.start_slots) <= 1
+        expression = sum(y[obs.idx][start_slot_idx] for start_slot_idx in obs.start_slot_map) <= 1
         solver.addConstr(expression)
 
     # *** CONSTRAINT TYPE 2 ***
     # No more than one observation should be scheduled in each slot.
-    for timeslot_idx, timeslot in enumerated_timeslots:
+    for time_slot_idx, time_slot in enumerated_timeslots:
         # This handles the case where if an observation starts in time slot t, it runs to completion,
         # occupying all the needed time slots.
         # The for comprehension is messy here, and requires repeated calculations, so we use loops.
         expression = 0
         for obs in observations:
             # For each possible start slot for this observation:
-            for start_slot in obs.start_slots:
-                start_slot_idx = start_slot.timeslot_idx
+            for start_slot_idx in obs.start_slot_map:
                 # a_ikt * Y_ik -> a_ikt is 1 if starting obs idx in start_slot_idx means that it will occupy
                 # slot time_slot, else 0.
                 #
                 # Thus, to simplify over LCO, instead of using a_ikt, we include Y_ik
                 # in this constraint if starting at start slot means that the observation will occupy
                 # time slot (a_ikt = 1), and we omit it otherwise (a_ikt = 0)
-                if start_slot_idx <= timeslot_idx < start_slot_idx + \
+                if start_slot_idx <= time_slot_idx < start_slot_idx + \
                         int(ceil(obs.obs_time.mins() / time_slots.time_slot_length.mins())):
                     expression += y[obs.idx][start_slot_idx]
         solver.addConstr(expression <= 1)
@@ -79,7 +78,7 @@ def schedule(time_slots: TimeSlots, observations: List[Observation]) -> Tuple[Sc
     # Divide by the length of the semester.
     objective_function = sum([obs.priority
                               * obs.start_slot_map[start_slot_idx]
-                              * y[obs.idx][start_slot.time_slot_idx]
+                              * y[obs.idx][start_slot_idx]
                               * obs.obs_time.mins()
                               for obs in observations
                               for start_slot_idx in obs.start_slot_map]) / \

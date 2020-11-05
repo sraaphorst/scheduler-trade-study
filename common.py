@@ -108,7 +108,7 @@ class TimeSlots:
         We then increment by timeslot_length and create another time slot.
         We continue to create time slots until we have the specified number for each resource.
 
-        :param time_slot_length: the length of the time slots in s, default is 5 min
+        :param time_slot_length: the length of the time slots (i.e. the granularity of the schedule)
         :param number_of_time_slots_per_site: the number of time slots per site
         """
         self.time_slot_length = time_slot_length

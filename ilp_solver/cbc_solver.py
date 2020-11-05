@@ -36,13 +36,14 @@ def schedule(time_slots: TimeSlots, observations: List[Observation]) -> Tuple[Sc
     y = []
     for obs in observations:
         print(f"**** {obs.idx} -> {obs.start_slot_map}")
-        yo = {start_slot: solver.BoolVar('y_%d_%d' % (obs.idx, start_slot)) for start_slot in obs.start_slot_map}
+        yo = {start_slot_idx: solver.BoolVar('y_%d_%d' % (obs.idx, start_slot_idx))
+              for start_slot_idx in obs.start_slot_map}
         y.append(yo)
 
     # *** CONSTRAINT TYPE 1 ***
     # First, no observation should be scheduled for more than one start.
     for obs in observations:
-        expression = sum(y[obs.idx][start_slot] for start_slot in obs.start_slot_map) <= 1
+        expression = sum(y[obs.idx][start_slot_idx] for start_slot_idx in obs.start_slot_map) <= 1
         solver.Add(expression)
 
     # *** CONSTRAINT TYPE 2 ***
