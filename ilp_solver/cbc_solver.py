@@ -35,7 +35,6 @@ def schedule(time_slots: TimeSlots, observations: List[Observation]) -> Tuple[Sc
     # Create the decision variables, Y_is: observation i can start in start slot s.
     y = []
     for obs in observations:
-        print(f"**** {obs.idx} -> {obs.start_slot_map}")
         yo = {start_slot_idx: solver.BoolVar('y_%d_%d' % (obs.idx, start_slot_idx))
               for start_slot_idx in obs.start_slot_map}
         y.append(yo)

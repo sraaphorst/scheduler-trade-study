@@ -6,7 +6,7 @@ from input_parser import read_tables
 from time_units import Time
 from random import seed
 import time
-import ga_solver
+import ga_solver_old
 
 if __name__ == '__main__':
     time_slots, observations = read_tables('obstab.fits',
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     # Run the genetic algorithm.
     print(f"*** RUNNING ALGORITHM for {len(observations)} observations ***")
     start_time = time.monotonic()
-    ga = ga_solver.GeneticAlgorithm(observations, time_slots)
+    ga = ga_solver_old.GeneticAlgorithm(observations, time_slots)
     c_gn, c_gs = ga.run(10000)
     end_time = time.monotonic()
     print('\n\n*** RESULTS ***')
