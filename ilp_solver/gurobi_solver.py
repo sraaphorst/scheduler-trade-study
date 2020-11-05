@@ -110,4 +110,4 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
                 # This is the start slot for the observation. Fill in the consecutive slots needed to complete it.
                 for i in range(int(ceil(obs.obs_time.mins() / time_slots.time_slot_length.mins()))):
                     final_schedule[time_slot_idx + i] = obs.idx
-    return final_schedule[:time_slots.num_time_slots_per_site], final_schedule[time_slots.num_time_slots_per_site+1:]
+    return final_schedule[time_slots.num_time_slots_per_site+1:], final_schedule[:time_slots.num_time_slots_per_site]

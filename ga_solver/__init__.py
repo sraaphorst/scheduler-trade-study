@@ -375,7 +375,7 @@ class GeneticAlgortihm:
         # Pick the best chromosome and return it.
         return copy(self.chromosomes[0])
 
-    def run(self, max_iterations_without_improvement=1000) -> Tuple[Chromosome, Chromosome]:
+    def run(self, max_iterations_without_improvement=1000) -> Tuple[Schedule, Schedule]:
         """
         Run the genetic algorithm prototype and return the best chromosomes for GN and GS.
         There is a danger that an observation that can be scheduled at both sites will be.
@@ -411,4 +411,7 @@ class GeneticAlgortihm:
             if best.site == Site.GS:
                 best_c_gs = best
 
-        return best_c_gn, best_c_gs
+        # If either is still None, return an empty schedule.
+        best_gs = best_c_gs.schedule if best_c_gs is not None else [None] * self.time_slots.num_time_slots_per_site
+        best_gn = best_c_gn.schedule if best_c_gn is not None else [None] * self.time_slots.num_time_slots_per_site
+        return best_gn, best_gs
