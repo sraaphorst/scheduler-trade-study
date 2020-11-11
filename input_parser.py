@@ -26,6 +26,14 @@ def read_tables(observation_table: str,
     # Get the obs_id of the observations we are considering.
     obs_ids = [row['obs_id'] for row in obstab]
 
+    # Get the sites and bands of the observations we are considering:
+    site_map = {'S': Site.GS, 'N': Site.GN}
+    band_map = {'1': Band.Band1, '2': Band.Band2, '3': Band.Band3, '4': Band.Band4}
+    info = {obs_id: re.match('G([SN])-20[012]\d[AB]-[A-Z]+-(\d)\d+-\d+', obs_id) for obs_id in obs_ids}
+
+    sites = {obs_id: site_map[info[obs_id][1]] for obs_id in obs_ids}
+    bands = {obs_id: band_map[info[obs_id][2]] for obs_id in obs_ids}
+
     # Get the fixed priorities for the observations. These are 0 or a fixed constant.
     # If they are 0, do not include them. If they are a fixed constant, include them.
     priority_list = {obs_id: list(enumerate(row['weight'])) for obs_id in obs_ids for row in targtab_metvis
@@ -63,7 +71,7 @@ def read_tables(observation_table: str,
                            if row['id'] == obs_id}
 
     # We filter the 0s out, so now we have only the non-zero values, which is what we want.
-    # These are the possible starting time slots for the obserrvations.
+    # These are the possible starting time slots for the observations.
     # start_slot_priorities[obs_id][time_slot_idx] = time_slot_priority
     start_slot_priorities = {obs_id: {id: all_slot_priorities[obs_id][id] for id in start_slots[obs_id]}
                              for obs_id in obs_ids}
@@ -72,13 +80,23 @@ def read_tables(observation_table: str,
     num_time_slots = len(targtab_metvis[0]['weight'])
     time_slots = TimeSlots(granularity, num_time_slots)
 
+    # TODO: Hacks to make greedy-max's partial scheduling scheme work with CFHT's genetic algorithm.
+    # obs_lengths['GS-2018B-Q-224-34'] is okay: 6 timeslots.
+    obs_lengths['GS-2018B-Q-207-48'] = Time((43 - 7 + 1) * time_slots.time_slot_length.mins(), TimeUnits.minutes)
+    obs_lengths['GS-2018B-Q-218-342'] = Time((86 - 44 + 1) * time_slots.time_slot_length.mins(), TimeUnits.minutes)
+    obs_lengths['GS-2018B-Q-218-363'] = Time((123 - 87 + 1) * time_slots.time_slot_length.mins(), TimeUnits.minutes)
+    # obs_lengths['GS-2019A-Q-229-18'] is okay: 5 timeslots.
+    # obs_lengths['GS-2018B-Q-112-24'] is okay: some time already used, 13 remaining timeslots.
+    # obs_lengths['GS-2018B-Q-112-25'] is okay: some time already used, 15 timeslots.
+    # obs_lengths['GS-2018B-Q-112-26'] is okay: some time already used, 16 timeslots.
+
     # Create the observations.
     # We parse out the observations that have no start_slot_priorities, i.e. they cannot be started.
     observations = []
     for obs_id in obs_ids:
         if priorities[obs_id] == 0 or len(start_slot_priorities[obs_id]) == 0:
             continue
-        observations.append(Observation(obs_id, Site.GS, Band.Band1, obs_lengths[obs_id],
+        observations.append(Observation(obs_id, sites[obs_id], bands[obs_id], obs_lengths[obs_id],
                                         start_slot_priorities[obs_id], priorities[obs_id]))
 
     return time_slots, observations

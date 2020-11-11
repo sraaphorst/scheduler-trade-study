@@ -17,7 +17,7 @@ class TimeUnits(IntEnum):
     hours = 5
 
 
-Quantity = int
+Quantity = float
 
 
 # Immutable Time class, in nanosecond precision, but defaulting to minutes representation.
@@ -30,13 +30,15 @@ class Time:
                     TimeUnits.minutes: 1000 * 1000 * 1000 * 60,
                     TimeUnits.hours: 1000 * 1000 * 1000 * 60 * 60}
 
-    def __init__(self, quantity: Quantity, unit: TimeUnits = TimeUnits.minutes):
+    def __init__(self, quantity: Quantity, unit: TimeUnits = TimeUnits.minutes, printit=False):
         super(Time, self).__setattr__('quantity', quantity)
         super(Time, self).__setattr__('unit', unit)
         super(Time, self).__setattr__('ns', quantity * self._conversions[unit])
+        if printit:
+            print('->', quantity, self.quantity, self.ns)
 
     def to_unit(self, new_unit: TimeUnits) -> Quantity:
-        return self.ns // self._conversions[new_unit]
+        return self.ns / self._conversions[new_unit]
 
     def __eq__(self, other):
         return self.ns == other.ns

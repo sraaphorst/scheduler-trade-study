@@ -7,6 +7,7 @@ from random import choice, randrange, seed, sample
 from copy import copy
 from typing import List, Tuple, Union
 import numpy as np
+from output import calculate_score, convert_to_schedule
 
 # A Chromosome maintains a Schedule as defined in common, i.e. a list where the contents of position x are the obs_id
 # of the observation scheduled for time_slot x, and None if nothing is scheduled.
@@ -152,17 +153,26 @@ class Chromosome:
         """
         return self.scheduling[idx][1]
 
+
 class GeneticAlgortihm:
-    def __init__(self, time_slots: TimeSlots, observations: List[Observation]):
+    def __init__(self, time_slots: TimeSlots, observations: List[Observation], include_greedy_max=False):
         self.time_slots = time_slots
         self.observations = observations
         self.chromosomes = []
+        self.include_greedy_max = include_greedy_max
 
     def _form_initial_population(self):
         """
         We form the initial population of chromosomes by putting them at the earliest period that we can.
         Every observation is scheduled in one chromosome per site in which it is allowed.
         """
+        def find(obs_name: str) -> Union[int, None]:
+            for obs in self.observations:
+                if obs.name == obs_name:
+                    return obs.idx
+            return None
+
+
         # Sort the observations by their maximum potential score.
         sorted_obs_idx_by_score = [obs.idx for obs in sorted(self.observations,
                                                              key=lambda x: x.priority * x.obs_time.mins()
@@ -187,6 +197,21 @@ class GeneticAlgortihm:
                     c = Chromosome(self.time_slots, self.observations, site)
                     if c.insert(obs_idx):
                         self.chromosomes.append(c)
+
+            self._sort_chromosomes()
+
+        if self.include_greedy_max:
+            # Add Bryan's chromosome to the GA.
+            b1_scheduling = [(1, find('GS-2018B-Q-224-34')), (7, find('GS-2018B-Q-207-48')),
+                             (44, find('GS-2018B-Q-218-342')), (87, find('GS-2018B-Q-218-363')),
+                             (124, find('GS-2019A-Q-229-10')), (129, find('GS-2018B-Q-112-24')),
+                             (142, find('GS-2018B-Q-112-25')), (157, find('GS-2018B-Q-112-26'))]
+            b1_chromosome = Chromosome(self.time_slots, self.observations, Site.GS)
+            b1_chromosome.schedule = convert_to_schedule(self.time_slots, self.observations, b1_scheduling)
+            b1_chromosome.scheduling = b1_scheduling
+            self.chromosomes.append(b1_chromosome)
+            print(f'Greedy-max chromosome: fitness: {b1_chromosome.determine_fitness()}, '
+                  f'score: {calculate_score(self.time_slots, self.observations, b1_scheduling)}')
 
             self._sort_chromosomes()
 

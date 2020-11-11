@@ -170,20 +170,71 @@ class Observation:
     """
     The basic information that comprises an observation.
     """
-    # Keep a counter of all observations.
-    counter = 0
+    # Keep a static counter of all observations.
+    _counter = 0
+
+    # # Static information to calculate the priority.
+    # _params = {
+    #     Band.Band1: {'m1': 1.406, 'b1': 2.0, 'm2': 0.50, 'b2': 0.5, 'xb': 0.8, 'xb0': 0.0, 'xc0': 0.0},
+    #     Band.Band2: {'m1': 1.406, 'b1': 1.0, 'm2': 0.50, 'b2': 0.5, 'xb': 0.8, 'xb0': 0.0, 'xc0': 0.0},
+    #     Band.Band3: {'m1': 1.406, 'b1': 0.0, 'm2': 0.50, 'b2': 0.5, 'xb': 0.8, 'xb0': 0.0, 'xc0': 0.0},
+    #     Band.Band4: {'m1': 0.00, 'b1': 0.0, 'm2': 0.00, 'b2': 0.0, 'xb': 0.8, 'xb0': 0.0, 'xc0': 0.0}
+    # }
+    #
+    # # Spread the metric to avoid band overlaps.
+    # _m2 = {Band.Band3: 1.0, Band.Band2: 6.0, Band.Band1: 20.0}  # use with b1 + 5.
+    # _xb = 0.8
+    # _b1 = 0.2
+    # for _band in [Band.Band3, Band.Band2, Band.Band1]:
+    #     _b2 = _b1 + 5. - _m2[_band]
+    #     _m1 = (_m2[_band] * _xb + _b2) / _xb ** 2
+    #     _params[_band]['m1'] = _m1
+    #     _params[_band]['m2'] = _m2[_band]
+    #     _params[_band]['b1'] = _b1
+    #     _params[_band]['b2'] = _b2
+    #     _params[_band]['xb'] = _xb
+    #     _b1 += _m2[_band] * 1.0 + _b2
 
     def __init__(self, name: str,
                  site: Site,
                  band: Band,
                  obs_time: Time,
                  start_slot_map: TimeSlotMap,
-                 priority: Metric):
+                 priority: Metric,
+                 allocated_time: Time = None):
         self.name = name
-        self.idx = Observation.counter
+        self.idx = Observation._counter
         self.site = site
         self.band = band
+        self.used_time = Time(0)
         self.obs_time = obs_time
+        self.allocated_time = obs_time if allocated_time is None else allocated_time
         self.start_slot_map = start_slot_map
         self.priority = priority
-        Observation.counter += 1
+
+        # self.calculate_priority()
+
+        Observation._counter += 1
+
+    # def calculate_priority(self):
+    #     time = (self.used_time.mins() + self.obs_time.mins()) / self.allocated_time.mins()
+    #     completed = min(1.0, time)
+    #
+    #     if self.band == Band.Band3:
+    #         xb = 0.8
+    #     else:
+    #         xb = self._params[self.band]['xb']
+    #
+    #     # Determine the intercept for the second piece (b2) so that the functions are continuous.
+    #     b2 = self._params[self.band]['b2'] + self._params[self.band]['xb0'] + self._params[self.band]['b1']
+    #
+    #     if completed == 0.0:
+    #         priority = 0.0
+    #     elif completed < xb:
+    #         priority = self._params[self.band]['m1'] * completed ** 2 + self._params[self.band]['b1']
+    #     elif completed < 1.0:
+    #         priority = self._params[self.band]['m2'] * completed + b2
+    #     else:
+    #         priority = self._params[self.band]['m2'] * 1.0 * b2 + self._params[self.band]['xc0']
+    #     print(self.name, self.band, time, completed, self.priority, priority)
+    #     self.priority = priority
