@@ -1,0 +1,24 @@
+Tasks to do:
+1. Add variable time slots per site.
+2. Switch to use the new calculate score function in output, which does the rough integration over hour angle
+   instead of using obs_length * the first hour angle at which scheduling occurs, which is incorrect.
+   Make genetic algorithm use this scoring function for chromosomes: this will give a more accurate score.
+3. Modify ILP objective function to mirror 2. Think on this:
+   Instead of obs_time * start_map[time_slot_idx], we should be doing something along the lines of:
+   time_slot_length * start_map[time_slot_idx]? This seems like it will throw off the score wildly, though, or reduce
+   it (although this reduction will likely be parallelled by the correction in the GA).
+   The difficulty will be in observations with gaps smaller than the timeslot granularity. I'm not sure we can handle
+   this: for now, ignore this factor for both GAs and ILPs. It is in place for GAs, but not ILPs. I don't think it
+   is possible for ILPs.
+4. In the input, we truncate the start_slot table to only include legal starting positions: this is incorrect, as we
+   should include all hour angle values, and have separate variables to indicate the first and last legal starting
+   timeslot per site.
+5. Change to numpy to be able to do a proper integration? I'm not sure that we can do this for ILPs, so this may not
+   be an option and we may have to do the rough integration of slices of timeslot length * hour angle score. Think
+   about this. Switching to numpy should be very easy: leveraging numpy efficiently will be trickier.
+
+Thoughts:
+1. ILPs have limitations in: timeslot / hour angle integration and partial scheduling.
+2. ILPs will likely make AND / OR much easier.
+3. The bookkeeping with partial scheduling with GAs will be very difficult, especially when it comes to the chromosome
+   operations.

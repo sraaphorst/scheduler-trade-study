@@ -64,6 +64,37 @@ def convert_to_scheduling(schedule: Union[None, Schedule]) -> Union[None, Schedu
 
 def calculate_score(time_slots: TimeSlots,
                     observations: List[Observation],
+                    schedule: Union[None, Schedule]) -> Union[None, float]:
+    """
+    Given a schedule, e.g [2, 2, 2, 2, None, 3, 3, ...], calculate its score by multiplying the priority
+    by the rough integration of the hour angle function.
+    :param time_slots:
+    :param observations:
+    :param schedule:
+    :return:
+    """
+    if schedule is None:
+        return None
+    score = 0
+    #obs_len_remaining = None
+    #prev_obs_idx = None
+    time_slot_length = time_slots.time_slot_length.mins()
+
+    for time_slot_idx, obs_idx in enumerate(schedule):
+        obs = observations[obs_idx]
+        # if prev_obs_idx is None or prev_obs_idx != obs_idx:
+        #    obs_len_remaining = obs.obs_time.mins()
+        #    prev_obs_idx = obs_idx
+
+        # score += obs.priority * min(obs_len_remaining, time_slot_length) * obs.start_slot_map[time_slot_idx]
+        socre += obs.priority * time_slot_length * obs.start_slot_map[time_slot_idx]
+        # obs_len_remaining -= time_slot_length
+
+    return score / (time_slot_length * time_slots.num_time_slots_per_site)
+
+
+def calculate_score(time_slots: TimeSlots,
+                    observations: List[Observation],
                     scheduling: Union[None, Scheduling]) -> Union[None, float]:
     if scheduling is None:
         return None
