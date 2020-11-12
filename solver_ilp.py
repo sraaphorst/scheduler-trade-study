@@ -7,8 +7,8 @@ import output
 from time import monotonic
 
 if __name__ == '__main__':
-    # tabdir = './'
-    tabdir = './newdata/'
+    tabdir = './'
+    # tabdir = './newdata/'
     time_slots, observations = read_tables(tabdir + 'obstab.fits',
                                            tabdir + 'timetab.fits',
                                            tabdir + 'targtab_metvis.fits',
