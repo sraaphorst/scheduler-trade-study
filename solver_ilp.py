@@ -7,12 +7,13 @@ import output
 from time import monotonic
 
 if __name__ == '__main__':
-    tabdir = './'
-    # tabdir = './newdata/'
-    time_slots, observations = read_tables(tabdir + 'obstab.fits',
-                                           tabdir + 'timetab.fits',
-                                           tabdir + 'targtab_metvis.fits',
-                                           tabdir + 'targtab_metvisha.fits')
+    tabdir = './data/'
+    prefix = ''
+    suffix = '' # '_20201109'
+    time_slots, observations = read_tables(f'{tabdir}{prefix}obstab{suffix}.fits',
+                                           f'{tabdir}{prefix}timetab{suffix}.fits',
+                                           f'{tabdir}{prefix}targtab_metvis{suffix}.fits',
+                                           f'{tabdir}{prefix}targtab_metvisha{suffix}.fits')
 
     # Run the solver.
     start_time = monotonic()
@@ -32,5 +33,5 @@ if __name__ == '__main__':
     # Once print_schedule is implemented, delete the indicated area.
     print('\n\n*** RESULTS ***')
     print(f'Time taken: {total_time} s')
-    output.print_schedule(time_slots, observations, gn_schedule, gs_schedule)
+    output.print_schedule2(time_slots, observations, gn_schedule, gs_schedule)
 

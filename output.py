@@ -74,7 +74,7 @@ def calculate_score(time_slots: TimeSlots,
     return score / (time_slots.time_slot_length.mins() * time_slots.num_time_slots_per_site)
 
 
-def print_schedule2(time_slots: TimeSlots, observations: List[Observation], site: Site, schedule: Schedule) -> None:
+def print_schedule(time_slots: TimeSlots, observations: List[Observation], site: Site, schedule: Schedule) -> None:
     """
     Output the schedule in an easy-to-read format. This should consist of something akin to:
 
@@ -147,8 +147,8 @@ def detailed_schedule(name: str,
     return data
 
 
-def print_schedule(time_slots: TimeSlots, observations: List[Observation],
-                   gn_schedule: Schedule, gs_schedule: Schedule) -> None:
+def print_schedule2(time_slots: TimeSlots, observations: List[Observation],
+                    gn_schedule: Schedule, gs_schedule: Schedule) -> None:
     """
     Given the execution of a call to schedule, print the results.
     :param time_slots: the TimeSlots object
