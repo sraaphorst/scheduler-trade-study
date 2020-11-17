@@ -13,9 +13,7 @@ Tasks to do:
 4. In the input, we truncate the start_slot table to only include legal starting positions: this is incorrect, as we
    should include all hour angle values, and have separate variables to indicate the first and last legal starting
    timeslot per site.
-5. Change to numpy to be able to do a proper integration? I'm not sure that we can do this for ILPs, so this may not
-   be an option and we may have to do the rough integration of slices of timeslot length * hour angle score. Think
-   about this. Switching to numpy should be very easy: leveraging numpy efficiently will be trickier.
+
 
 Thoughts:
 1. ILPs have limitations in: timeslot / hour angle integration and partial scheduling.

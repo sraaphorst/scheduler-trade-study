@@ -9,6 +9,7 @@
 
 from enum import IntEnum
 from typing import List, Union, Dict, Tuple
+from math import ceil
 from time_units import Time
 
 # The schedule consists of a list corresponding between timeslot indices and observation indices, or None
@@ -31,8 +32,8 @@ Score = float
 # Metrics.
 Metric = float
 
-# For observations, a map from available time slots to their value.
-TimeSlotMap = Dict[int, Metric]
+# For observations, a map from available time slot indices to metric
+Weights = Dict[int, Metric]
 
 
 # Define the sites.
@@ -100,8 +101,10 @@ class TimeSlots:
     """
     # TODO: Change the default value here
     def __init__(self,
-                 time_slot_length: Time = Time(1),
-                 number_of_time_slots_per_site: int = 173):
+                 time_slot_length: Time,
+                 gs_time_slots: int,
+                 gn_time_slots: int,
+                 time_slot_overlap: int):
         """
         Create the collection of time slots, which consist of a collection of TimeSlot
         objects as below for scheduling.
@@ -111,31 +114,43 @@ class TimeSlots:
         We continue to create time slots until we have the specified number for each resource.
 
         :param time_slot_length: the length of the time slots (i.e. the granularity of the schedule)
-        :param number_of_time_slots_per_site: the number of time slots per site
+        :param gs_time_slots: the number of time slots at GS
+        :param gn_time_slots: the number of time slots at GN
+        :param time_slot_overlap: the overlap in the files between the time slots:
+                                  gn_start_time_slots to gs_end_time_slots.
         """
         self.time_slot_length = time_slot_length
-        self.num_time_slots_per_site = number_of_time_slots_per_site
+        self.num_time_slots_per_site = {Site.GS: gs_time_slots, Site.GN: gn_time_slots}
+        self.total_time_slots = gs_time_slots + gn_time_slots
+        self._time_slot_overlap = time_slot_overlap
 
-        self.time_slots = []
-        for site in Site:
-            if site == Site.Both:
-                continue
-            for idx in range(number_of_time_slots_per_site):
-                self.time_slots.append(TimeSlot(site,
-                                                Time(idx * time_slot_length.mins()),
-                                                Time(time_slot_length.mins())))
+        self._time_slots = []
+        for site in [Site.GS, Site.GN]:
+            for idx in range(self.num_time_slots_per_site[site]):
+                # TODO: Is this calculation correct?
+                # TODO: I think so. GN time slots are advanced by the # of GS time slots and then moved back
+                # TODO: by the overlap to put them at the correct time.
+                time_slot_start = idx + (0 if site == Site.GS else
+                                         self.num_time_slots_per_site[Site.GS] - self._time_slot_overlap)
+                self._time_slots.append(TimeSlot(site,
+                                                 Time(time_slot_start * time_slot_length.mins()),
+                                                 Time(time_slot_length.mins())))
 
-    def get_time_slot(self, site: Site, index: int) -> TimeSlot:
+    def get_time_slot(self, site: Site, index: int) -> Union[None, TimeSlot]:
         """
         Given a site and an index into its time slots, return the corresponding time slot.
         :param site: the Site
-        :param index: the index, in [0, number_of_time_slots_per_site)
+        :param index: the index, in [0, _num_time_slots_per_site[site])
         :return: the TimeSlot, if it exists
         :except: ValueError if the index condition is violated
         """
         if site == Site.Both:
             raise ValueError("get_time_slot requires a specific site")
-        return self.time_slots[site * self.num_time_slots_per_site + index]
+        elif site == Site.GS:
+            return self._time_slots[index] if index < self.num_time_slots_per_site[Site.GS] else None
+        else:
+            return self._time_slots[self.num_time_slots_per_site[Site.GS] + index] \
+                if index < self.num_time_slots_per_site[Site.GN] else None
 
     def __iter__(self):
         """
@@ -145,6 +160,7 @@ class TimeSlots:
         return _TimeSlotsIterator(self)
 
 
+# TODO: Do we need this at all? How do we modify it? To return all the GS slots, and then the GN slots?
 class _TimeSlotsIterator:
     """
     Iterator class for TimeSlots.
@@ -159,8 +175,8 @@ class _TimeSlotsIterator:
         :return: the next time slot
         :except: StopIteration when the iteration is done
         """
-        if self._index < len(self._timeslots.time_slots):
-            slot = self._timeslots.time_slots[self._index]
+        if self._index < len(self._timeslots._time_slots):
+            slot = self._timeslots._time_slots[self._index]
             self._index += 1
             return slot
         raise StopIteration
@@ -173,34 +189,12 @@ class Observation:
     # Keep a static counter of all observations.
     _counter = 0
 
-    # # Static information to calculate the priority.
-    # _params = {
-    #     Band.Band1: {'m1': 1.406, 'b1': 2.0, 'm2': 0.50, 'b2': 0.5, 'xb': 0.8, 'xb0': 0.0, 'xc0': 0.0},
-    #     Band.Band2: {'m1': 1.406, 'b1': 1.0, 'm2': 0.50, 'b2': 0.5, 'xb': 0.8, 'xb0': 0.0, 'xc0': 0.0},
-    #     Band.Band3: {'m1': 1.406, 'b1': 0.0, 'm2': 0.50, 'b2': 0.5, 'xb': 0.8, 'xb0': 0.0, 'xc0': 0.0},
-    #     Band.Band4: {'m1': 0.00, 'b1': 0.0, 'm2': 0.00, 'b2': 0.0, 'xb': 0.8, 'xb0': 0.0, 'xc0': 0.0}
-    # }
-    #
-    # # Spread the metric to avoid band overlaps.
-    # _m2 = {Band.Band3: 1.0, Band.Band2: 6.0, Band.Band1: 20.0}  # use with b1 + 5.
-    # _xb = 0.8
-    # _b1 = 0.2
-    # for _band in [Band.Band3, Band.Band2, Band.Band1]:
-    #     _b2 = _b1 + 5. - _m2[_band]
-    #     _m1 = (_m2[_band] * _xb + _b2) / _xb ** 2
-    #     _params[_band]['m1'] = _m1
-    #     _params[_band]['m2'] = _m2[_band]
-    #     _params[_band]['b1'] = _b1
-    #     _params[_band]['b2'] = _b2
-    #     _params[_band]['xb'] = _xb
-    #     _b1 += _m2[_band] * 1.0 + _b2
-
     def __init__(self, name: str,
                  site: Site,
                  band: Band,
                  obs_time: Time,
-                 start_slot_map: TimeSlotMap,
-                 priority: Metric,
+                 start_slots: List[int],
+                 weights: Weights,
                  allocated_time: Time = None):
         self.name = name
         self.idx = Observation._counter
@@ -209,32 +203,15 @@ class Observation:
         self.used_time = Time(0)
         self.obs_time = obs_time
         self.allocated_time = obs_time if allocated_time is None else allocated_time
-        self.start_slot_map = start_slot_map
-        self.priority = priority
-
-        # self.calculate_priority()
+        self.start_slots = start_slots
+        self.weights = weights
 
         Observation._counter += 1
 
-    # def calculate_priority(self):
-    #     time = (self.used_time.mins() + self.obs_time.mins()) / self.allocated_time.mins()
-    #     completed = min(1.0, time)
-    #
-    #     if self.band == Band.Band3:
-    #         xb = 0.8
-    #     else:
-    #         xb = self._params[self.band]['xb']
-    #
-    #     # Determine the intercept for the second piece (b2) so that the functions are continuous.
-    #     b2 = self._params[self.band]['b2'] + self._params[self.band]['xb0'] + self._params[self.band]['b1']
-    #
-    #     if completed == 0.0:
-    #         priority = 0.0
-    #     elif completed < xb:
-    #         priority = self._params[self.band]['m1'] * completed ** 2 + self._params[self.band]['b1']
-    #     elif completed < 1.0:
-    #         priority = self._params[self.band]['m2'] * completed + b2
-    #     else:
-    #         priority = self._params[self.band]['m2'] * 1.0 * b2 + self._params[self.band]['xc0']
-    #     print(self.name, self.band, time, completed, self.priority, priority)
-    #     self.priority = priority
+    def time_slots_needed(self, time_slots: TimeSlots) -> int:
+        """
+        Determine the number of time slots needed (we use ceiling to get this number).
+        :param self: the observation
+        :return: the number of required time slots
+        """
+        return ceil(self.obs_time.mins() / time_slots.time_slot_length.mins())

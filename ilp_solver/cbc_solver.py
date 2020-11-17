@@ -36,50 +36,65 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     y = []
     for obs in observations:
         yo = {start_slot_idx: solver.BoolVar('y_%d_%d' % (obs.idx, start_slot_idx))
-              for start_slot_idx in obs.start_slot_map}
+              for start_slot_idx in obs.start_slots}
         y.append(yo)
 
     # *** CONSTRAINT TYPE 1 ***
     # First, no observation should be scheduled for more than one start.
     for obs in observations:
-        expression = sum(y[obs.idx][start_slot_idx] for start_slot_idx in obs.start_slot_map) <= 1
+        expression = sum(y[obs.idx][start_slot_idx] for start_slot_idx in obs.start_slots) <= 1
         solver.Add(expression)
 
     # *** CONSTRAINT TYPE 2 ***
     # No more than one observation should be scheduled in each slot.
-    for time_slot_idx, time_slot in enumerated_time_slots:
+    for time_slot in time_slots:
+        time_slot_idx = time_slot.idx
+
         # This handles the case where if an observation starts in time slot t, it runs to completion,
         # occupying all the needed time slots.
         # The for comprehension is messy here, and requires repeated calculations, so we use loops.
         expression = 0
         for obs in observations:
             # For each possible start slot for this observation:
-            for start_slot_idx in obs.start_slot_map:
+            slots_needed = obs.time_slots_needed(time_slots)
+
+            for start_slot_idx in obs.start_slots:
                 # a_ikt * Y_ik -> a_ikt is 1 if starting obs obs_idx in start_slot_idx means that it will occupy
                 # slot time_slot, else 0.
                 #
                 # Thus, to simplify over LCO, instead of using a_ikt, we include Y_ik
                 # in this constraint if starting at start slot means that the observation will occupy
                 # time slot (a_ikt = 1), and we omit it otherwise (a_ikt = 0)
-                if start_slot_idx <= time_slot_idx < start_slot_idx + \
-                        int(ceil(obs.obs_time.mins() / time_slots.time_slot_length.mins())):
+                # TODO: If we start at start_slot_index for this obs, does it contain time_slot_idx?
+                # TODO: If so, include the variable starting y_obs,ssi in the expression for this time slot.
+                # TODO: This may need adjustment since we chopped start_slots' length by slots_needed (unless 1).
+                if start_slot_idx <= time_slot_idx < start_slot_idx + slots_needed:
+                #if start_slot_idx <= time_slot_idx and time_slot_idx + slots_needed - 1 in obs.start_slots:
                     expression += y[obs.idx][start_slot_idx]
         solver.Add(expression <= 1)
-
-    # observations.calculate_priority()
 
     # Create the objective function. Multiply each variable for the priority for the:
     # 1. observation metric
     # 2. metric score for the timeslot observation
     # 3. the observation length for the observation
     # Divide by the length of the semester.
-    objective_function = sum([obs.priority
-                              * obs.start_slot_map[start_slot_idx]
-                              * y[obs.idx][start_slot_idx]
-                              * obs.obs_time.mins()
-                              for obs in observations
-                              for start_slot_idx in obs.start_slot_map]) / \
-                         (time_slots.time_slot_length.mins() * time_slots.num_time_slots_per_site)
+    objective_function = 0
+    for obs in observations:
+        slots_needed = obs.time_slots_needed(time_slots)
+        for i in range(slots_needed):
+            for start_slot_idx in obs.start_slots:
+                # Make sure that if we start at start_slot_idx, the observation will fit in the start slots.
+                # if start_slot_idx + i in obs.start_slots:
+                if start_slot_idx + slots_needed in obs.start_slots:
+                    objective_function += y[obs.idx][start_slot_idx + i] * obs.weights[start_slot_idx + i] * time_slots.time_slot_length.mins()
+    # objective_function = sum([y[obs.idx][start_slot_idx + i]
+    #                           * obs.weights[start_slot_idx + i]
+    #                           * time_slots.time_slot_length.mins()
+    #                           for obs in observations
+    #                           for i in range(ceil(obs.obs_time.mins() / time_slots.time_slot_length.mins()))
+    #                           for start_slot_idx in obs.start_slots]) / \
+    #                      (time_slots.time_slot_length.mins() * time_slots.total_time_slots)
+    objective_function /= time_slots.time_slot_length.mins() * time_slots.total_time_slots
     solver.Maximize(objective_function)
 
     # Run the solver.
@@ -96,8 +111,8 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     # print()
 
     # Iterate over each timeslot index and see if an observation has been scheduled for it.
-    final_schedule = [None] * (time_slots.num_time_slots_per_site * 2)
-    for time_slot_idx in range(time_slots.num_time_slots_per_site * 2):
+    final_schedule = [None] * time_slots.total_time_slots
+    for time_slot_idx in range(time_slots.total_time_slots):
         # Try to find a variable whose observation was scheduled for this timeslot.
         # Otherwise, the value for the timeslot will be None.
         for obs in observations:
@@ -108,4 +123,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
                 # Consecutive slots needed:
                 for i in range(int(ceil(obs.obs_time.mins() / time_slots.time_slot_length.mins()))):
                     final_schedule[time_slot_idx + i] = obs.idx
-    return final_schedule[time_slots.num_time_slots_per_site+1:], final_schedule[:time_slots.num_time_slots_per_site]
+    print(final_schedule[:time_slots.num_time_slots_per_site[Site.GS]])
+    print(final_schedule[time_slots.num_time_slots_per_site[Site.GS]:])
+    return final_schedule[:time_slots.num_time_slots_per_site[Site.GS]],\
+           final_schedule[time_slots.num_time_slots_per_site[Site.GS]:]
