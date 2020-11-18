@@ -59,7 +59,7 @@ def read_tables(time_table: str,
     # visfrac_gn = {obs_id: obstab[obs_id == obs_id]['visfrac_gn'] for obs_id in obs_ids}
 
     # *** WEIGHTS AND SITE ***
-    # TODO: wha_gs / wha_gn longer than the number of time_slots for the night?
+    # TODO: why is wha_gs / wha_gn longer than the number of time_slots for the night?
     weight_gs = {obs_id: targtab_metvisha[idx]['weight_gs'][:gs_time_slots] for idx, obs_id in enumerate(obs_ids)}
     south = {obs_id: max(weight_gs[obs_id]) > 0 for obs_id in obs_ids}
     weight_gn = {obs_id: targtab_metvisha[idx]['weight_gn'][gn_start_time_slot:] for idx, obs_id in enumerate(obs_ids)}
@@ -89,6 +89,7 @@ def read_tables(time_table: str,
     start_slots_gs = {}
     start_slots_gn = {}
     for obs_id in obs_ids:
+        # We don't have observations yet, so this calculation must be repeated.
         time_slots_needed = ceil(obs_lengths[obs_id].mins() / time_slot_length.mins())
 
         # GS time slots
@@ -101,7 +102,6 @@ def read_tables(time_table: str,
         if time_slots_needed > 1:
             start_slots_gs[obs_id] = start_slots_gs[obs_id][:-(time_slots_needed - 1)]
             start_slots_gn[obs_id] = start_slots_gn[obs_id][:-(time_slots_needed - 1)]
-
         start_slots[obs_id] = start_slots_gs[obs_id] + start_slots_gn[obs_id]
 
     # Create the time slots: in the example data, there should be 173, each of 3 minutes (the granularity).
