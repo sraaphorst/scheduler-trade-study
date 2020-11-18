@@ -1,22 +1,19 @@
 Tasks to do:
-1. Add variable time slots per site.
-2. Switch to use the new calculate score function in output, which does the rough integration over hour angle
-   instead of using obs_length * the first hour angle at which scheduling occurs, which is incorrect.
-   Make genetic algorithm use this scoring function for chromosomes: this will give a more accurate score.
-3. Modify ILP objective function to mirror 2. Think on this:
-   Instead of obs_time * start_map[time_slot_idx], we should be doing something along the lines of:
-   time_slot_length * start_map[time_slot_idx]? This seems like it will throw off the score wildly, though, or reduce
-   it (although this reduction will likely be parallelled by the correction in the GA).
-   The difficulty will be in observations with gaps smaller than the timeslot granularity. I'm not sure we can handle
-   this: for now, ignore this factor for both GAs and ILPs. It is in place for GAs, but not ILPs. I don't think it
-   is possible for ILPs.
-4. In the input, we truncate the start_slot table to only include legal starting positions: this is incorrect, as we
-   should include all hour angle values, and have separate variables to indicate the first and last legal starting
-   timeslot per site.
+1. Make sure start_slots are being used correctly in the ILP program.
 
+2. Check the genetic algorithm's weird behaviour: why, for example, are the GN scores so low?
+
+3. To understand:
+If I look at the first observation in the data set, GS-2018B-FT-208-18, it only has weights for weight_gs and not for weight_gn (so only schedulable at weight_gs); furthermore, it has 382 entries in weight_gs, so it can be scheduled in that range (provided it fits in the 382, of course).
+On the other hand, for this observations, wha_gs has 822 entries, which is more than the 516 total time slots available for the GS 12 degree twilight sunset to sunrise.
+I’m not clear why there are so many entries in wha_gs.
+
+4. Input JIRA tasks
 
 Thoughts:
 1. ILPs have limitations in: timeslot / hour angle integration and partial scheduling.
+
 2. ILPs will likely make AND / OR much easier.
+
 3. The bookkeeping with partial scheduling with GAs will be very difficult, especially when it comes to the chromosome
    operations.
