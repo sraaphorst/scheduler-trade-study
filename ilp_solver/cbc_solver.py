@@ -78,15 +78,23 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     # 2. metric score for the timeslot observation
     # 3. the observation length for the observation
     # Divide by the length of the semester.
+    # objective_function = 0
+    # for obs in observations:
+    #     slots_needed = obs.time_slots_needed(time_slots)
+    #     for i in range(slots_needed):
+    #         for start_slot_idx in obs.start_slots:
+    #             # Make sure that if we start at start_slot_idx, the observation will fit in the start slots.
+    #             # if start_slot_idx + i in obs.start_slots:
+    #             if start_slot_idx + slots_needed in obs.start_slots:
+    #                 objective_function += y[obs.idx][start_slot_idx + i] * obs.weights[start_slot_idx + i] * time_slots.time_slot_length.mins()
+    time_slot_length = time_slots.time_slot_length.mins()
     objective_function = 0
     for obs in observations:
         slots_needed = obs.time_slots_needed(time_slots)
-        for i in range(slots_needed):
-            for start_slot_idx in obs.start_slots:
-                # Make sure that if we start at start_slot_idx, the observation will fit in the start slots.
-                # if start_slot_idx + i in obs.start_slots:
-                if start_slot_idx + slots_needed in obs.start_slots:
-                    objective_function += y[obs.idx][start_slot_idx + i] * obs.weights[start_slot_idx + i] * time_slots.time_slot_length.mins()
+        objective_function += sum((y[obs.idx][start_slot_idx + i] * obs.weights[start_slot_idx + i] * time_slot_length
+                                   for i in range(slots_needed) for start_slot_idx in obs.start_slots
+                                   if start_slot_idx + slots_needed in obs.start_slots))
+
     # objective_function = sum([y[obs.idx][start_slot_idx + i]
     #                           * obs.weights[start_slot_idx + i]
     #                           * time_slots.time_slot_length.mins()
