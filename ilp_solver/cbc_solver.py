@@ -4,6 +4,7 @@
 from __future__ import print_function
 from math import ceil
 from typing import Tuple
+from output import length_of_night_in_mins
 
 from ortools.linear_solver import pywraplp
 
@@ -65,28 +66,11 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
                 # Thus, to simplify over LCO, instead of using a_ikt, we include Y_ik
                 # in this constraint if starting at start slot means that the observation will occupy
                 # time slot (a_ikt = 1), and we omit it otherwise (a_ikt = 0)
-                # TODO: If we start at start_slot_index for this obs, does it contain time_slot_idx?
-                # TODO: If so, include the variable starting y_obs,ssi in the expression for this time slot.
-                # TODO: This may need adjustment since we chopped start_slots' length by slots_needed (unless 1).
                 if start_slot_idx <= time_slot_idx < start_slot_idx + slots_needed:
-                #if start_slot_idx <= time_slot_idx and time_slot_idx + slots_needed - 1 in obs.start_slots:
                     expression += y[obs.idx][start_slot_idx]
         solver.Add(expression <= 1)
 
-    # Create the objective function. Multiply each variable for the priority for the:
-    # 1. observation metric
-    # 2. metric score for the timeslot observation
-    # 3. the observation length for the observation
-    # Divide by the length of the semester.
-    # objective_function = 0
-    # for obs in observations:
-    #     slots_needed = obs.time_slots_needed(time_slots)
-    #     for i in range(slots_needed):
-    #         for start_slot_idx in obs.start_slots:
-    #             # Make sure that if we start at start_slot_idx, the observation will fit in the start slots.
-    #             # if start_slot_idx + i in obs.start_slots:
-    #             if start_slot_idx + slots_needed in obs.start_slots:
-    #                 objective_function += y[obs.idx][start_slot_idx + i] * obs.weights[start_slot_idx + i] * time_slots.time_slot_length.mins()
+    # Create the objective function.
     time_slot_length = time_slots.time_slot_length.mins()
     objective_function = 0
     for obs in observations:
@@ -94,15 +78,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
         objective_function += sum((y[obs.idx][start_slot_idx + i] * obs.weights[start_slot_idx + i] * time_slot_length
                                    for i in range(slots_needed) for start_slot_idx in obs.start_slots
                                    if start_slot_idx + slots_needed in obs.start_slots))
-
-    # objective_function = sum([y[obs.idx][start_slot_idx + i]
-    #                           * obs.weights[start_slot_idx + i]
-    #                           * time_slots.time_slot_length.mins()
-    #                           for obs in observations
-    #                           for i in range(ceil(obs.obs_time.mins() / time_slots.time_slot_length.mins()))
-    #                           for start_slot_idx in obs.start_slots]) / \
-    #                      (time_slots.time_slot_length.mins() * time_slots.total_time_slots)
-    objective_function /= time_slots.time_slot_length.mins() * time_slots.total_time_slots
+    objective_function /= time_slot_length * time_slots.total_time_slots
     solver.Maximize(objective_function)
 
     # Run the solver.
@@ -112,6 +88,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     # Right now, it is just a measure of the observations being scheduled (the score gets the priority of a
     # scheduled observation), but this will be much more complicated later on.
     schedule_score = solver.Objective().Value()
+    print(schedule_score)
 
     # for idx1 in range(len(y)):
     #     for idx2 in y[idx1]:
