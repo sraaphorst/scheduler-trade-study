@@ -61,23 +61,10 @@ def read_tables(time_table: str,
     # *** WEIGHTS AND SITE ***
     # TODO: why is wha_gs / wha_gn longer than the number of time_slots for the night?
     weight_gs = {obs_id: targtab_metvisha[idx]['weight_gs'][:gs_time_slots] for idx, obs_id in enumerate(obs_ids)}
-    south = {obs_id: max(weight_gs[obs_id]) > 0 for obs_id in obs_ids}
     weight_gn = {obs_id: targtab_metvisha[idx]['weight_gn'][gn_start_time_slot:] for idx, obs_id in enumerate(obs_ids)}
-    north = {obs_id: max(weight_gn[obs_id]) > 0 for obs_id in obs_ids}
     weights = {obs_id: np.append(weight_gs[obs_id], weight_gn[obs_id]) for obs_id in obs_ids}
     # wha_gs = {obs_id: targtab_metvisha[obs_id == obs_id]['wha_gs'] for obs_id in obs_ids}
     # wha_gn = {obs_id: targtab_metvisha[obs_id == obs_id]['wha_gn'] for obs_id in obs_ids}
-
-    sites = {}
-    for obs_id in obs_ids:
-        if south[obs_id] and north[obs_id]:
-            sites[obs_id] = Site.Both
-        elif south[obs_id]:
-            sites[obs_id] = Site.GS
-        elif north[obs_id]:
-            sites[obs_id] = Site.GN
-        else:
-            sites[obs_id] = None
 
     # *** OBS LENGTHS ***
     # Get the remaining observation lengths.
@@ -106,6 +93,19 @@ def read_tables(time_table: str,
 
     # Create the time slots: in the example data, there should be 173, each of 3 minutes (the granularity).
     time_slots = TimeSlots(time_slot_length, gs_time_slots, gn_time_slots, time_slot_overlap)
+
+    south = {obs_id: len(start_slots_gs[obs_id]) > 0 for obs_id in obs_ids}
+    north = {obs_id: len(start_slots_gn[obs_id]) > 0 for obs_id in obs_ids}
+    sites = {}
+    for obs_id in obs_ids:
+        if south[obs_id] and north[obs_id]:
+            sites[obs_id] = Site.Both
+        elif south[obs_id]:
+            sites[obs_id] = Site.GS
+        elif north[obs_id]:
+            sites[obs_id] = Site.GN
+        else:
+            sites[obs_id] = None
 
     # TODO: Hacks to make greedy-max's partial scheduling scheme work with CFHT's genetic algorithm.
     # obs_lengths['GS-2018B-Q-224-34'] is okay: 6 timeslots.

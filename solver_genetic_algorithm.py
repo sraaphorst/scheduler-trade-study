@@ -15,7 +15,7 @@ if __name__ == '__main__':
                                            f'{tabdir}{prefix}targtab_metvisha{suffix}.fits')
 
     start_time = monotonic()
-    num_runs = 10
+    num_runs = 2
     gs_tot_score, gn_tot_score = 0, 0
     gs_best_score, gn_best_score = 0, 0
     gs_best_schedule, gn_best_schedule = None, None
