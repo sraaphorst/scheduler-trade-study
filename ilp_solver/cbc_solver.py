@@ -2,9 +2,7 @@
 # By Sebastian Raaphorst, 2020.
 
 from __future__ import print_function
-from math import ceil
 from typing import Tuple
-from output import length_of_night_in_mins
 
 from ortools.linear_solver import pywraplp
 
@@ -48,6 +46,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
 
     # *** CONSTRAINT TYPE 2 ***
     # No more than one observation should be scheduled in each slot.
+    # Given a time slot, ensure that only one schedule can be in a time slot.
     for time_slot in time_slots:
         time_slot_idx = time_slot.idx
 
@@ -56,18 +55,23 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
         # The for comprehension is messy here, and requires repeated calculations, so we use loops.
         expression = 0
         for obs in observations:
+            # Find the possible start slots that would cover the time slot given the observation's length.
+            # These are the slots that are within (time_slot_idx - slots_needed, time_slot_idx].
+            # If we only need one slot, for example, then this is just time_slot_idx.
             # For each possible start slot for this observation:
             slots_needed = obs.time_slots_needed(time_slots)
 
             for start_slot_idx in obs.start_slots:
+                if time_slot_idx - slots_needed < start_slot_idx <= time_slot_idx:
+                    expression += y[obs.idx][start_slot_idx]
                 # a_ikt * Y_ik -> a_ikt is 1 if starting obs obs_idx in start_slot_idx means that it will occupy
                 # slot time_slot, else 0.
                 #
                 # Thus, to simplify over LCO, instead of using a_ikt, we include Y_ik
                 # in this constraint if starting at start slot means that the observation will occupy
                 # time slot (a_ikt = 1), and we omit it otherwise (a_ikt = 0)
-                if start_slot_idx <= time_slot_idx < start_slot_idx + slots_needed:
-                    expression += y[obs.idx][start_slot_idx]
+                # if start_slot_idx <= time_slot_idx < start_slot_idx + slots_needed:
+                #     expression += y[obs.idx][start_slot_idx]
         solver.Add(expression <= 1)
 
     # Create the objective function.
@@ -75,9 +79,8 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     objective_function = 0
     for obs in observations:
         slots_needed = obs.time_slots_needed(time_slots)
-        objective_function += sum((y[obs.idx][start_slot_idx + i] * obs.weights[start_slot_idx + i] * time_slot_length
-                                   for i in range(slots_needed) for start_slot_idx in obs.start_slots
-                                   if start_slot_idx + slots_needed in obs.start_slots))
+        objective_function += sum((y[obs.idx][start_slot_idx] * obs.weights[start_slot_idx + i] * time_slot_length
+                                   for i in range(slots_needed) for start_slot_idx in obs.start_slots))
     objective_function /= time_slot_length * time_slots.total_time_slots
     solver.Maximize(objective_function)
 
@@ -88,7 +91,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     # Right now, it is just a measure of the observations being scheduled (the score gets the priority of a
     # scheduled observation), but this will be much more complicated later on.
     schedule_score = solver.Objective().Value()
-    print(schedule_score)
+    print(f'Objval: {schedule_score}')
 
     # for idx1 in range(len(y)):
     #     for idx2 in y[idx1]:
@@ -106,7 +109,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
             if time_slot_idx in y[obs.idx] and y[obs.idx][time_slot_idx].solution_value() == 1:
                 # This is the start slot for the observation. Fill in the consecutive slots needed to complete it.
                 # Consecutive slots needed:
-                for i in range(int(ceil(obs.obs_time.mins() / time_slots.time_slot_length.mins()))):
+                for i in range(obs.time_slots_needed(time_slots)):
                     final_schedule[time_slot_idx + i] = obs.idx
     print(final_schedule[:time_slots.num_time_slots_per_site[Site.GS]])
     print(final_schedule[time_slots.num_time_slots_per_site[Site.GS]:])

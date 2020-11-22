@@ -2,11 +2,10 @@
 # By Sebastian Raaphorst, 2020.
 
 from common import *
-from math import ceil
-from random import choice, randrange, seed, sample
+from random import choice, randrange, sample, shuffle
 from copy import copy
 from typing import List, Tuple, Union
-from output import calculate_scheduling_score, convert_to_schedule
+from output import calculate_scheduling_score
 from time import monotonic
 
 # A Chromosome maintains a Schedule as defined in common, i.e. a list where the contents of position x are the obs_id
@@ -365,8 +364,31 @@ class GeneticAlgortihm:
         obs_idx_to_add = sample(range(len(candidates)), min(len(candidates), n))
         for obs_idx in obs_idx_to_add:
             new_c.insert(obs_idx)
-        # if new_c.scheduling == c.scheduling:
-        #     return False
+
+        if new_c.determine_fitness() > c.determine_fitness() and not self._contains(site, new_c):
+            self.chromosomes[site][c_idx] = new_c
+            self._sort_chromosomes()
+            return True
+
+        return False
+
+    def _shuffle(self, site: Site) -> bool:
+        """
+        Reorder the observations in a chromosome by adding them to a new chromosome in a random order
+        and then seeing if this does better than the original chromosome.
+        """
+        c_idx = self._single_selection(site)
+        c = self.chromosomes[site][c_idx]
+
+        if len(c) <= 1:
+            return False
+
+        shuffled_obs_idxs = [obs_idx for _, obs_idx in c.scheduling]
+        shuffle(shuffled_obs_idxs)
+
+        new_c = Chromosome(self.time_slots, self.observations, site)
+        for obs_idx in shuffled_obs_idxs:
+            c.insert(obs_idx)
 
         if new_c.determine_fitness() > c.determine_fitness() and not self._contains(site, new_c):
             self.chromosomes[site][c_idx] = new_c
@@ -405,6 +427,7 @@ class GeneticAlgortihm:
                 self._interleave(site)
                 self._mutation_swap(site)
                 self._mutation_mix(site)
+                self._shuffle(site)
             # print(f'GS chromosomes: {len([c for c in self.chromosomes if c.site == Site.GS])}')
             # print(f'GN chromosomes: {len([c for c in self.chromosomes if c.site == Site.GN])}')
             # print('*** DONE ITERATION ***')
