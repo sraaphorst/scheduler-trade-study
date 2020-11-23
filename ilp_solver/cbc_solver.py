@@ -17,15 +17,11 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
 
     :param time_slots: the time slots as created by input_parameters.create_time_slots
     :param observations: the list of Observation
-    :return: a tuple of Schedule as defined above, and the score for the schedule
+    :return: a tuple of Schedule as defined above
     """
 
-    # Note: Start slots run from 0 to 2 * num_slots_per_site - 1, where each grouping of
-    # i * num_slots_per_site to (i+1) * num_slots_per_site - 1 represents the slots
-    # for resource i.
-
-    # Enumerated time slots: we want to work with the index of these objects.
-    enumerated_time_slots = list(enumerate(time_slots))
+    # Note: Start slots run from 0 to time_slots.time_slots_per_site[Site.GS] +
+    # time_slots.time_slots_per_site[Site.GN].
 
     # Create the MIP solver.
     solver = pywraplp.Solver('scheduler', pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING)
@@ -34,7 +30,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     # Create the decision variables, Y_is: observation i can start in start slot s.
     y = []
     for obs in observations:
-        yo = {start_slot_idx: solver.BoolVar('y_%d_%d' % (obs.idx, start_slot_idx))
+        yo = {start_slot_idx: solver.BoolVar(f'y_{obs.idx}_{start_slot_idx}')
               for start_slot_idx in obs.start_slots}
         y.append(yo)
 
@@ -93,11 +89,6 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     schedule_score = solver.Objective().Value()
     print(f'Objval: {schedule_score}')
 
-    # for idx1 in range(len(y)):
-    #     for idx2 in y[idx1]:
-    #         print(f'y[{idx1}][{idx2}] = {y[idx1][idx2].solution_value()}')
-    # print()
-
     # Iterate over each timeslot index and see if an observation has been scheduled for it.
     final_schedule = [None] * time_slots.total_time_slots
     for time_slot_idx in range(time_slots.total_time_slots):
@@ -111,7 +102,6 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
                 # Consecutive slots needed:
                 for i in range(obs.time_slots_needed(time_slots)):
                     final_schedule[time_slot_idx + i] = obs.idx
-    print(final_schedule[:time_slots.num_time_slots_per_site[Site.GS]])
-    print(final_schedule[time_slots.num_time_slots_per_site[Site.GS]:])
+
     return final_schedule[:time_slots.num_time_slots_per_site[Site.GS]],\
            final_schedule[time_slots.num_time_slots_per_site[Site.GS]:]
