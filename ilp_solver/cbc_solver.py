@@ -9,7 +9,7 @@ from ortools.linear_solver import pywraplp
 from common import *
 
 
-def ilp_scheduler(txime_slots: TimeSlots, observations: List[Observation]) -> Tuple[Schedule, Schedule]:
+def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tuple[Schedule, Schedule]:
     """
     Given a set of time slots and observations as defined in input_parameters,
     try to schedule as many observations as possible according to priority.
@@ -19,7 +19,6 @@ def ilp_scheduler(txime_slots: TimeSlots, observations: List[Observation]) -> Tu
     :param observations: the list of Observation
     :return: a tuple of Schedule as defined above
     """
-    print("CBC")
 
     # Note: Start slots run from 0 to time_slots.time_slots_per_site[Site.GS] +
     # time_slots.time_slots_per_site[Site.GN].
@@ -103,7 +102,6 @@ def ilp_scheduler(txime_slots: TimeSlots, observations: List[Observation]) -> Tu
                 # Consecutive slots needed:
                 for i in range(obs.time_slots_needed(time_slots)):
                     final_schedule[time_slot_idx + i] = obs.idx
-    print(final_schedule[:time_slots.num_time_slots_per_site[Site.GS]])
-    print(final_schedule[time_slots.num_time_slots_per_site[Site.GS]:])
+
     return final_schedule[:time_slots.num_time_slots_per_site[Site.GS]],\
            final_schedule[time_slots.num_time_slots_per_site[Site.GS]:]

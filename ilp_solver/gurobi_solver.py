@@ -19,7 +19,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     :param observations: the list of Observation
     :return: a tuple of Schedule as defined above
     """
-    print("GUROBI")
+
     # Note: Start slots run from 0 to time_slots.time_slots_per_site[Site.GS] +
     # time_slots.time_slots_per_site[Site.GN].
 
@@ -106,7 +106,6 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
                 # This is the start slot for the observation. Fill in the consecutive slots needed to complete it.
                 for i in range(obs.time_slots_needed(time_slots)):
                     final_schedule[time_slot_idx + i] = obs.idx
-    print(final_schedule[:time_slots.num_time_slots_per_site[Site.GS]])
-    print(final_schedule[time_slots.num_time_slots_per_site[Site.GS]:])
+
     return final_schedule[:time_slots.num_time_slots_per_site[Site.GS]], \
            final_schedule[time_slots.num_time_slots_per_site[Site.GS]:]
