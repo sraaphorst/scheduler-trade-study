@@ -6,7 +6,6 @@ from random import choice, randrange, sample, shuffle
 from copy import copy
 from typing import List, Tuple, Union
 from output import calculate_scheduling_score
-from time import monotonic
 
 # A Chromosome maintains a Schedule as defined in common, i.e. a list where the contents of position x are the obs_id
 # of the observation scheduled for time_slot x, and None if nothing is scheduled.
@@ -475,26 +474,26 @@ class GeneticAlgortihm:
                 ([Site.GN] if len(self.chromosomes[Site.GN]) > 0 else 0)
 
         # Check that everything is scheduled.
-        obs_in_gs_chroms = len(set([obs_idx for c in self.chromosomes[Site.GS] for _, obs_idx in c.scheduling]))
-        obs_in_gn_chroms = len(set([obs_idx for c in self.chromosomes[Site.GN] for _, obs_idx in c.scheduling]))
-        gs_obs = len([obs for obs in self.observations if obs.site == Site.GS])
-        gn_obs = len([obs for obs in self.observations if obs.site == Site.GN])
-        gb_obs = len([obs for obs in self.observations if obs.site == Site.Both])
+        # obs_in_gs_chroms = len(set([obs_idx for c in self.chromosomes[Site.GS] for _, obs_idx in c.scheduling]))
+        # obs_in_gn_chroms = len(set([obs_idx for c in self.chromosomes[Site.GN] for _, obs_idx in c.scheduling]))
+        # gs_obs = len([obs for obs in self.observations if obs.site == Site.GS])
+        # gn_obs = len([obs for obs in self.observations if obs.site == Site.GN])
+        # gb_obs = len([obs for obs in self.observations if obs.site == Site.Both])
 
-        print(f'obs_in_gs_chroms={obs_in_gs_chroms}, gs_obs={gs_obs}, both={gb_obs}, total={gs_obs + gb_obs}')
-        print(f'obs_in_gn_chroms={obs_in_gn_chroms}, gn_obs={gn_obs}, both={gb_obs}, total={gn_obs + gb_obs}')
-        assert(obs_in_gs_chroms == gs_obs + gb_obs)
-        assert(obs_in_gn_chroms == gn_obs + gb_obs)
+        # print(f'obs_in_gs_chroms={obs_in_gs_chroms}, gs_obs={gs_obs}, both={gb_obs}, total={gs_obs + gb_obs}')
+        # print(f'obs_in_gn_chroms={obs_in_gn_chroms}, gn_obs={gn_obs}, both={gb_obs}, total={gn_obs + gb_obs}')
+        # assert(obs_in_gs_chroms == gs_obs + gb_obs)
+        # assert(obs_in_gn_chroms == gn_obs + gb_obs)
 
-        print(f'GS obs: {gs_obs}, GN obs: {gn_obs}, Both: {gb_obs}')
-        print('\nGS Initial Chromosomes')
-        for n, c in enumerate(self.chromosomes[Site.GS]):
-            print(f'{n}: {c.determine_fitness()} {len([i for i in c.schedule if i is not None])} {c.scheduling}')
-            # print(f'\t{c.schedule}')
-        print('GN Initial chromosomes:')
-        for n, c in enumerate(self.chromosomes[Site.GN]):
-            print(f'{n}: {c.determine_fitness()} {len([i for i in c.schedule if i is not None])} {c.scheduling}')
-            # print(f'\t{c.schedule}')
+        # print(f'GS obs: {gs_obs}, GN obs: {gn_obs}, Both: {gb_obs}')
+        # print('\nGS Initial Chromosomes')
+        # for n, c in enumerate(self.chromosomes[Site.GS]):
+        #     print(f'{n}: {c.determine_fitness()} {len([i for i in c.schedule if i is not None])} {c.scheduling}')
+        #     # print(f'\t{c.schedule}')
+        # print('GN Initial chromosomes:')
+        # for n, c in enumerate(self.chromosomes[Site.GN]):
+        #     print(f'{n}: {c.determine_fitness()} {len([i for i in c.schedule if i is not None])} {c.scheduling}')
+        #     # print(f'\t{c.schedule}')
 
         best_c_gn = None
         best_c_gs = None
@@ -508,28 +507,23 @@ class GeneticAlgortihm:
         if best_site == Site.GS:
             best_c_gs = best_c
 
-        # TODO: REMOVE: Why are these sets the same???
+        # print('\nGS Final Chromosomes')
+        # for n, c in enumerate(self.chromosomes[Site.GS]):
+        #     print(f'{n}: {c.determine_fitness()} {len([i for i in c.schedule if i is not None])} {c.scheduling}')
+        #     # print(f'\t{c.schedule}')
+        # print('GN Final chromosomes:')
+        # for n, c in enumerate(self.chromosomes[Site.GN]):
+        #     print(f'{n}: {c.determine_fitness()} {len([i for i in c.schedule if i is not None])} {c.scheduling}')
+        #     # print(f'\t{c.schedule}')
 
-        gb_obs = set([o for c in self.chromosomes[Site.GS] for _, o in c.scheduling])
-        gw_obs = set([o for c in self.chromosomes[Site.GN] for _, o in c.scheduling])
+        # obs_in_gs_chroms = len(set([obs_idx for c in self.chromosomes[Site.GS] for _, obs_idx in c.scheduling]))
+        # obs_in_gn_chroms = len(set([obs_idx for c in self.chromosomes[Site.GN] for _, obs_idx in c.scheduling]))
+        # gs_obs = len([obs for obs in self.observations if obs.site == Site.GS])
+        # gn_obs = len([obs for obs in self.observations if obs.site == Site.GN])
+        # gb_obs = len([obs for obs in self.observations if obs.site == Site.Both])
 
-        print('\nGS Final Chromosomes')
-        for n, c in enumerate(self.chromosomes[Site.GS]):
-            print(f'{n}: {c.determine_fitness()} {len([i for i in c.schedule if i is not None])} {c.scheduling}')
-            # print(f'\t{c.schedule}')
-        print('GN Final chromosomes:')
-        for n, c in enumerate(self.chromosomes[Site.GN]):
-            print(f'{n}: {c.determine_fitness()} {len([i for i in c.schedule if i is not None])} {c.scheduling}')
-            # print(f'\t{c.schedule}')
-
-        obs_in_gs_chroms = len(set([obs_idx for c in self.chromosomes[Site.GS] for _, obs_idx in c.scheduling]))
-        obs_in_gn_chroms = len(set([obs_idx for c in self.chromosomes[Site.GN] for _, obs_idx in c.scheduling]))
-        gs_obs = len([obs for obs in self.observations if obs.site == Site.GS])
-        gn_obs = len([obs for obs in self.observations if obs.site == Site.GN])
-        gb_obs = len([obs for obs in self.observations if obs.site == Site.Both])
-
-        print(f'obs_in_gs_chroms={obs_in_gs_chroms}, gs_obs={gs_obs}, both={gb_obs}, total={gs_obs + gb_obs}')
-        print(f'obs_in_gn_chroms={obs_in_gn_chroms}, gn_obs={gn_obs}, both={gb_obs}, total={gn_obs + gb_obs}')
+        # print(f'obs_in_gs_chroms={obs_in_gs_chroms}, gs_obs={gs_obs}, both={gb_obs}, total={gs_obs + gb_obs}')
+        # print(f'obs_in_gn_chroms={obs_in_gn_chroms}, gn_obs={gn_obs}, both={gb_obs}, total={gn_obs + gb_obs}')
 
         # Drop all the observations from the other site that have been scheduled for this site.
         other_site = Site.GN if best_site == Site.GS else Site.GS
@@ -540,10 +534,10 @@ class GeneticAlgortihm:
         # Remove any blank chromosomes.
         self.chromosomes[other_site] = [o for o in self.chromosomes[other_site] if len(o.scheduling) > 0]
 
-        print(f'**** NEW CHROMOSOMES ****')
-        for n, c in enumerate([c for c in self.chromosomes[other_site]]):
-            print(f'{n}: {len([i for i in c.schedule if i is not None])} {c.scheduling}')
-            # print(f'\t{c.schedule}')
+        # print(f'**** NEW CHROMOSOMES ****')
+        # for n, c in enumerate([c for c in self.chromosomes[other_site]]):
+        #     print(f'{n}: {len([i for i in c.schedule if i is not None])} {c.scheduling}')
+        #     # print(f'\t{c.schedule}')
 
         # Now repeat the process if chromosomes are left. All that is left are chromosomes from the other site.
         if len(self.chromosomes[other_site]) > 0:
