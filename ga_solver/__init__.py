@@ -359,7 +359,7 @@ class GeneticAlgortihm:
             new_c.remove(obs_idx)
 
         # Pick n random observation indices to try to insert.
-        candidates = [o for o in self.observations if o.site in {Site.GS, Site.Both}]
+        candidates = self.observations # [o for o in self.observations if o.site in {Site.GS, Site.Both}]
         obs_idx_to_add = sample(range(len(candidates)), min(len(candidates), n))
         for obs_idx in obs_idx_to_add:
             new_c.insert(obs_idx)

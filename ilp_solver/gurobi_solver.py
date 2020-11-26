@@ -39,6 +39,16 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
         y.append(yo)
         solver.update()
 
+    # *** SCHEDULE VARIABLES: FOR AND / OR ***
+    # Create variables dependent on the other variables above to determine if an observation is scheduled.
+    # y_sched[obs_id] is 1 if obs_id is scheduled, and 0 otherwise.
+    y_sched = [solver.addVar(vtype=GRB.BINARY, name=f'y_{obs.idx}') for obs in observations]
+    solver.update()
+
+    for obs in observations:
+        expression = - 1 * y_sched[obs.idx] + sum(y[obs.idx][start_slot_idx] for start_slot_idx in obs.start_slots) == 0
+        solver.addConstr(expression)
+
     # *** CONSTRAINT TYPE 1: Checked ***
     # First, no observation should be scheduled for more than one start.
     for obs in observations:
@@ -94,6 +104,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     schedule_score = solver.getObjective().getValue()
     print(f'Objval: {schedule_score}')
 
+    print([y_sched[obs.idx].X == 1.0 for obs in observations])
     # Iterate over each timeslot index and see if an observation has been scheduled for it.
     final_schedule = [None] * time_slots.total_time_slots
     for time_slot_idx in range(time_slots.total_time_slots):
