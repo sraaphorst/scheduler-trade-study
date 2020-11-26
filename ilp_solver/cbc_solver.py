@@ -34,13 +34,26 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
               for start_slot_idx in obs.start_slots}
         y.append(yo)
 
-    # *** SCHEDULE VARIABLES: FOR AND / OR ***
-    # Create variables dependent on the other variables above to determine if an observation is scheduled.
-    # y_sched[obs_id] is 1 if obs_id is scheduled, and 0 otherwise.
+    # *** SITE-DEPENDENT SCHEDULE VARIABLES: FOR AND / OR ***
+    # Create variables dependent on the other variables above to determine if an observation is scheduled at a site.
+    # y_site_sched[obs_id][site] is 1 if obs_id is scheduled at the site, and 0 otherwise.
+    y_site_sched = []
+    for obs in observations:
+        y_site_sched.append({Site.GS: solver.BoolVar(f'ysite_{obs.idx}{Site.GS}'),
+                             Site.GN: solver.BoolVar(f'ysite_{obs.idx}{Site.GN}')})
+
+        gs = sum(y[obs.idx][start_slot_idx] for start_slot_idx in obs.start_slots
+                 if start_slot_idx < time_slots.num_time_slots_per_site[Site.GS]) - y_site_sched[obs.idx][Site.GS] == 0
+        gn = sum(y[obs.idx][start_slot_idx] for start_slot_idx in obs.start_slots
+                 if start_slot_idx >= time_slots.num_time_slots_per_site[Site.GS]) - y_site_sched[obs.idx][Site.GN] == 0
+        solver.Add(gs)
+        solver.Add(gn)
+
+    # *** SITE-INDEPENDENT SCHEDULE VARIABLES: FOR AND / OR ***
     y_sched = [solver.BoolVar(f'y_{obs.idx}') for obs in observations]
 
     for obs in observations:
-        expression = - 1 * y_sched[obs.idx] + sum(y[obs.idx][start_slot_idx] for start_slot_idx in obs.start_slots) == 0
+        expression = - 1 * y_sched[obs.idx] + y_site_sched[obs.idx][Site.GS] + y_site_sched[obs.idx][Site.GN] == 0
         solver.Add(expression)
 
     # *** CONSTRAINT TYPE 1 ***
@@ -98,7 +111,10 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     schedule_score = solver.Objective().Value()
     print(f'Objval: {schedule_score}')
 
-    print([y_sched[obs.idx].solution_value() == 1 for obs in observations])
+    for obs in observations:
+        for site in {Site.GS, Site.GN}:
+            if y_site_sched[obs.idx][site].solution_value() == 1:
+                print(f'Observation {obs.idx} {obs.name} scheduled at site {Site(site).name}')
     # Iterate over each timeslot index and see if an observation has been scheduled for it.
     final_schedule = [None] * time_slots.total_time_slots
     for time_slot_idx in range(time_slots.total_time_slots):
