@@ -58,7 +58,7 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
 
     # *** TIME SLOT SCHEDULE VARIABLES: FOR AND / OR ***
     # y_slot[obs_id] = -1 if obs_id is not scheduled, and the time slot at which it is scheduled otherwise.
-    # GRB.INTEGER is lower-bound constrained to 0.0 by default so give it a lower bound of -1.
+    # CBC solver needs hard bounds for IntVars, so give it -1 (unscheduled) to total_time_slots (last possible slot).
     y_slot = [solver.IntVar(-1, time_slots.total_time_slots, f'y_slot_{obs.idx}') for obs in observations]
 
     for obs in observations:
