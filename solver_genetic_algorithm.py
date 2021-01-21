@@ -23,8 +23,8 @@ if __name__ == '__main__':
     for i in range(num_runs):
         ga = GeneticAlgortihm(time_slots, observations, include_greedy_max=False)
         schedule = ga.run()
-        score = calculate_scheduling_score(time_slots, observations,
-                                              output.convert_to_scheduling(gs_schedule))
+        join_schedule = schedule[0]+schedule[1]
+        score = calculate_schedule_score(time_slots, observations, join_schedule)
         #gn_score = calculate_scheduling_score(Site.GN, time_slots, observations,
         #                                      output.convert_to_scheduling(gn_schedule))
 
