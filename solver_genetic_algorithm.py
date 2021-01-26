@@ -23,6 +23,7 @@ if __name__ == '__main__':
     for i in range(num_runs):
         ga = GeneticAlgortihm(time_slots, observations, include_greedy_max=False)
         schedule = ga.run()
+        
         join_schedule = schedule[0]+schedule[1]
         score = calculate_schedule_score(time_slots, observations, join_schedule)
         #gn_score = calculate_scheduling_score(Site.GN, time_slots, observations,
@@ -51,6 +52,9 @@ if __name__ == '__main__':
     print(f'Time taken: {total_time} s')
     print(f'Average time per run: {total_time / num_runs} s')
     
+    #print(schedule)
+    #print(best_schedule)
+    #print('************************************************')
 
     # *** DELETE ***
     # gn_scheduling = output.convert_to_scheduling(gn_schedule)
@@ -64,5 +68,5 @@ if __name__ == '__main__':
 
     # Once print_schedule is implemented, delete the indicated area.
     print('\n\n')
-    output.print_schedule3(time_slots, observations, schedule)
+    output.print_schedule3(time_slots, observations, best_schedule)
 

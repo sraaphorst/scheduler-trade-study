@@ -184,9 +184,6 @@ class GeneticAlgortihm:
         for obs_idx in sorted_obs_idx_by_score:
             obs = self.observations[obs_idx]
             
-            # IGNORING OBS FOR BOTH SITES FOR THE MOMENT 
-            #if obs.site == Site.Both:
-            #    continue
             # Determine the sites in which it should be scheduled.
             sites = {Site.GN, Site.GS} if obs.site == Site.Both else {obs.site}
             gs_sched, gn_sched = 0, 0
@@ -196,9 +193,9 @@ class GeneticAlgortihm:
                     if chromosome.insert(obs_idx,site):
                         scheduled = True
                         break
-                if scheduled and obs.site == Site.GS:
+                if scheduled and site == Site.GS:
                     gs_sched += 1
-                if scheduled and obs.site == Site.GN:
+                if scheduled and site == Site.GN:
                     gn_sched += 1
            
                 # Create a new Chromosome for this site and insert it.   
@@ -447,6 +444,14 @@ class GeneticAlgortihm:
             c = self.chromosomes[site][0]
             print(f"Best fitness for {c.site.name}{f' iteration {i}' if i is not None else ''}: {c.determine_fitness()} {c.scheduling}")
 
+    def _print_chromosomes(self) -> None:
+        for c in self.chromosomes:
+            print('For GN')
+            print(','.join([str(x) for x in c.schedule[0]]))
+            print('For GS')
+            print(','.join([str(x) for x in c.schedule[1]]))
+            input()
+
     def _run(self, max_iterations_without_improvement) -> Union[None, Chromosome]:
         """
         The meat of the run algorithm. We do this twice: once to get a chromosome for each site as described in the
@@ -526,7 +531,7 @@ class GeneticAlgortihm:
         :return: two chromosomes, one for GN and one for GS
         """
         self._form_initial_population()
-
+        #self._print_chromosomes()
         #ites = ([Site.GS] if len(self.chromosomes[Site.GS]) > 0 else 0) + \
         #        ([Site.GN] if len(self.chromosomes[Site.GN]) > 0 else 0)
 
