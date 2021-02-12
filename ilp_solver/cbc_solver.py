@@ -56,6 +56,17 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
         expression = - 1 * y_sched[obs.idx] + y_site_sched[obs.idx][Site.GS] + y_site_sched[obs.idx][Site.GN] == 0
         solver.Add(expression)
 
+    # *** TIME SLOT SCHEDULE VARIABLES: FOR AND / OR ***
+    # y_slot[obs_id] = -1 if obs_id is not scheduled, and the time slot at which it is scheduled otherwise.
+    # CBC solver needs hard bounds for IntVars, so give it -1 (unscheduled) to total_time_slots (last possible slot).
+    y_slot = [solver.IntVar(-1, time_slots.total_time_slots, f'y_slot_{obs.idx}') for obs in observations]
+
+    for obs in observations:
+        expression = y_slot[obs.idx] + 1 - sum([(start_slot_idx + 1) * y[obs.idx][start_slot_idx]
+                                            for start_slot_idx in obs.start_slots]) == 0
+        solver.Add(expression)
+
+
     # *** CONSTRAINT TYPE 1 ***
     # First, no observation should be scheduled for more than one start.
     for obs in observations:
@@ -115,6 +126,11 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
         for site in {Site.GS, Site.GN}:
             if y_site_sched[obs.idx][site].solution_value() == 1:
                 print(f'Observation {obs.idx} {obs.name} scheduled at site {Site(site).name}')
+
+    for obs in observations:
+        if y_slot[obs.idx].solution_value() >= 0.0:
+            print(f'Observation {obs.idx} {obs.name} scheduled at time slot {int(y_slot[obs.idx].solution_value())}')
+
     # Iterate over each timeslot index and see if an observation has been scheduled for it.
     final_schedule = [None] * time_slots.total_time_slots
     for time_slot_idx in range(time_slots.total_time_slots):

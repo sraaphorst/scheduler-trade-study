@@ -44,8 +44,8 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
     # y_site_sched[obs_id][site] is 1 if obs_id is scheduled at the site, and 0 otherwise.
     y_site_sched = []
     for obs in observations:
-        y_site_sched.append({Site.GS: solver.addVar(vtype=GRB.BINARY, name=f'ysite_{obs.idx}{Site.GS}'),
-                             Site.GN: solver.addVar(vtype=GRB.BINARY, name=f'ysite_{obs.idx}{Site.GN}')})
+        y_site_sched.append({Site.GS: solver.addVar(vtype=GRB.BINARY, name=f'ysite_{obs.idx}_{Site.GS}'),
+                             Site.GN: solver.addVar(vtype=GRB.BINARY, name=f'ysite_{obs.idx}_{Site.GN}')})
         solver.update()
 
         gs = sum(y[obs.idx][start_slot_idx] for start_slot_idx in obs.start_slots
@@ -61,6 +61,17 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
 
     for obs in observations:
         expression = - 1 * y_sched[obs.idx] + y_site_sched[obs.idx][Site.GS] + y_site_sched[obs.idx][Site.GN] == 0
+        solver.addConstr(expression)
+
+    # *** TIME SLOT SCHEDULE VARIABLES: FOR AND / OR ***
+    # y_slot[obs_id] = -1 if obs_id is not scheduled, and the time slot at which it is scheduled otherwise.
+    # GRB.INTEGER is lower-bound constrained to 0.0 by default so give it a lower bound of -1.
+    y_slot = [solver.addVar(vtype=GRB.INTEGER, name=f'y_slot_{obs.idx}', lb=-1) for obs in observations]
+    solver.update()
+
+    for obs in observations:
+        expression = y_slot[obs.idx] + 1 - sum([(start_slot_idx + 1) * y[obs.idx][start_slot_idx]
+                                            for start_slot_idx in obs.start_slots]) == 0
         solver.addConstr(expression)
 
     # *** CONSTRAINT TYPE 1: Checked ***
@@ -122,6 +133,11 @@ def ilp_scheduler(time_slots: TimeSlots, observations: List[Observation]) -> Tup
         for site in {Site.GS, Site.GN}:
             if y_site_sched[obs.idx][site].X == 1.0:
                 print(f'Observation {obs.idx} {obs.name} scheduled at site {Site(site).name}')
+
+    for obs in observations:
+        if y_slot[obs.idx].X >= 0.0:
+            print(f'Observation {obs.idx} {obs.name} scheduled at time slot {int(y_slot[obs.idx].X)}')
+
     # Iterate over each timeslot index and see if an observation has been scheduled for it.
     final_schedule = [None] * time_slots.total_time_slots
     for time_slot_idx in range(time_slots.total_time_slots):
