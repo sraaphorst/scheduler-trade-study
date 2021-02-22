@@ -6,6 +6,7 @@ from random import choice, randrange, sample, shuffle
 from copy import copy
 from typing import List, Tuple, Union
 from output import calculate_schedule_score, calculate_scheduling_score
+from time_units import Time
 
 # A Chromosome maintains a Schedule as defined in common, i.e. a list where the contents of position x are the obs_id
 # of the observation scheduled for time_slot x, and None if nothing is scheduled.
@@ -62,9 +63,7 @@ class Chromosome:
         # Get the sorted indices of the unused time_slots that we can use for scheduling this observation.
         # TODO: WE NEED TO OFFSET TIME_SLOT_IDX BY THE OFFSET, IN THIS CASE
         offset = self.time_slots.num_time_slots_per_site[Site.GS] if site == Site.GN else 0
-        #print(obs.site)
-        #print(f'offset:{offset}')
-        #print(f'max: {self._max_obs_slot_idx} min: {self._min_obs_slot_idx}')
+        
         unused_time_slots = [time_slot_idx for time_slot_idx, obs_idx in enumerate(self.schedule[site]) if obs_idx is None
                              and time_slot_idx + offset in range(self._min_obs_slot_idx, self._max_obs_slot_idx + 1)]
 
@@ -76,6 +75,67 @@ class Chromosome:
                 return time_slot_idx
 
         return None
+
+    def _split_observation(self, obs_idx: int, site: int) -> Union[int,None]:
+        
+        obs = self.observations[obs_idx]
+        if obs.obs_time.mins() < 30: #check that for minutes; lower limit 
+            return None, None
+
+        slots_needed = obs.time_slots_needed(self.time_slots)
+        offset = self.time_slots.num_time_slots_per_site[Site.GS] if site == Site.GN else 0
+        time_slot_length = self.time_slots.time_slot_length.mins()
+        
+        # Get all unused time windows 
+        unused_time_windows = []
+        time_window_head = None
+        for time_slot_idx, obs_id in enumerate(self.schedule[site]):
+            if obs_id is None:
+                if time_window_head is None:
+                    time_window_head = time_slot_idx
+                if time_slot_idx == len(self.schedule[site]) - 1:
+                    time_window = [idx for idx in range(time_window_head,time_slot_idx)]
+                    unused_time_windows.append(time_window)
+            elif time_window_head is not None:
+                    time_window = [idx for idx in range(time_window_head,time_slot_idx)]
+                    unused_time_windows.append(time_window)
+                    time_window_head = None
+        
+        # Check for the first unused time window
+        scheduble_slots = None
+        for time_window in unused_time_windows:
+            if len(time_window) * time_slot_length > 30 and obs.obs_time.mins() > len(time_window)* time_slot_length:
+                    scheduble_slots = time_window
+                    remaining_obs_time = ceil(obs.obs_time.mins() - len(scheduble_slots)* time_slot_length)
+                    break
+        if scheduble_slots is None: 
+            return None, None # No time window found for the obs to be schedule
+        
+        # Create new obs based on remaining obs time 
+        partial_obs = copy(obs)
+        partial_obs.obs_time = Time(remaining_obs_time) # TODO: Transform to Time object
+        windows_slots_idx = [scheduble_slots[0]]
+        is_partial_schedule = False
+        partial_lengths = []
+
+       # Check if partial obs can be schedule in the the same chromosome in another time?
+        for unused_time_window in unused_time_windows:
+            if partial_obs.obs_time.mins() <= len(unused_time_window) * time_slot_length \
+                and scheduble_slots != unused_time_window: 
+                    windows_slots_idx.append(unused_time_window[0])
+                    is_partial_schedule = True
+                    break
+        if not is_partial_schedule:
+            # or put it back in the pool? 
+            # TODO: Find a good way to do this actually, because if we move to the next chromosome with this partial obs in
+            # the pool it might affect the rest of the procedures. The main thing is find a way to carry the obs without 
+            # influecing the rest of the chromosomes  
+            self.observations[obs_idx] = partial_obs
+            return windows_slots_idx, [len(scheduble_slots)]
+        
+        # Return new time_slot_idx of insertion and new length to be insert in the schedule
+        
+    return windows_slots_idx, [len(scheduble_slots), remaining_obs_time]
 
     def determine_capacity(self) -> float:
         """
@@ -112,15 +172,28 @@ class Chromosome:
         if obs_idx is None:
             return False # this validation is new, which is odd so I might be a problem when creating the initial popu
         obs = self.observations[obs_idx]
-
         if site not in {Site.Both, Site.GS, Site.GN}:
             return False
         
-        if obs_idx in self.schedule[site]:
+        if obs_idx in self.schedule[site]: # TODO: Must change this
             return False
         # Get the gaps into which we can insert.
         start_time_slot_idx = self._get_first_gap(obs_idx, site)
+
         if start_time_slot_idx is None:
+            # Check if the observation can be split in partial obs 
+            partial_time_slots_idx, partial_lengths = self._split_observation(obs_idx, site)
+            if partial_time_slots_idx:
+                # Add partials obs to the scheduling 
+                #print(partial_time_slots_idx,partial_lengths)
+                #print(f'Initial Schedule => {self.schedule[site]}')
+                for time_slot_idx, slots_needed in zip(partial_time_slots_idx,partial_lengths):
+                    self.schedule[site][time_slot_idx:(time_slot_idx + slots_needed)] = [obs_idx]* slots_needed
+                    self.scheduling.append((time_slot_idx, obs_idx))
+
+                #print(f'Final Schedule => {self.schedule[site]}')    
+                #x = input()
+                return True
             return False
 
         self.scheduling.append((start_time_slot_idx, obs_idx))
@@ -200,7 +273,6 @@ class GeneticAlgortihm:
            
                 # Create a new Chromosome for this site and insert it.   
                 if not scheduled:
-                    #print("lalalal")
                     c = Chromosome(self.time_slots, self.observations)
                     if c.insert(obs_idx,site):
                         self.chromosomes.append(c)

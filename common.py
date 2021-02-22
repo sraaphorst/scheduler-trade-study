@@ -35,6 +35,7 @@ Metric = float
 # For observations, a map from available time slot indices to metric
 Weights = Dict[int, Metric]
 
+ObservationsGroup = Dict[int, List[int]]
 
 # Define the sites.
 class Site(IntEnum):
@@ -215,3 +216,5 @@ class Observation:
         :return: the number of required time slots
         """
         return ceil(self.obs_time.mins() / time_slots.time_slot_length.mins())
+
+

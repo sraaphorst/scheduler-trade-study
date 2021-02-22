@@ -138,7 +138,7 @@ def calculate_scheduling_score(site: Site, time_slots: TimeSlots,
     if scheduling is None:
         return None
     return sum([calculate_observation_score(site, time_slots, observations[obs_idx], start_slot)
-                for start_slot, obs_idx in scheduling]) / length_of_night_in_mins_by_site(time_slots)
+                for start_slot, obs_idx in scheduling]) / length_of_night_in_mins_by_site(time_slots, site)
 
 
 def print_schedule(site: Site, time_slots: TimeSlots, observations: List[Observation], schedule: Schedule) -> None:
