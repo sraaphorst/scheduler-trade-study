@@ -7,12 +7,15 @@ from copy import copy
 from typing import List, Tuple, Union
 from output import calculate_schedule_score, calculate_scheduling_score
 from time_units import Time
+from itertools import groupby
+from termcolor import colored
 
 # A Chromosome maintains a Schedule as defined in common, i.e. a list where the contents of position x are the obs_id
 # of the observation scheduled for time_slot x, and None if nothing is scheduled.
 # A chromosome is linked to a site. We must handle this carefully for the following reasons:
 # 1. For observations that can be scheduled at both, we want them in a chromosome for each site.
 # 2. We do not want any observation to be scheduled twice.
+
 
 
 class Chromosome:
@@ -22,7 +25,9 @@ class Chromosome:
         self.schedule = [[None] * time_slots.num_time_slots_per_site[Site.GN],
                             [None] * time_slots.num_time_slots_per_site[Site.GS]]
         # Pairs of the form (time_slot_idx, obs_idx) where an observation has been scheduled.
-        self.scheduling = []
+        self.scheduling = [[],[]]
+        self.on_site = None
+        self.partitions = 0
 
     def __copy__(self):
         c = Chromosome(self.time_slots, self.observations)
@@ -30,13 +35,21 @@ class Chromosome:
         c.scheduling = self.scheduling.copy()
         return c
 
+    def on_site(self, site: Site):
+        """
+        Sets on_site variable to perform different operations to only that site part of of the chromosome 
+        """
+        if site not in {Site.Both, Site.GS, Site.GN}:
+           raise ValueError("Site does not exit.")
+        self.on_site = site
+
     def _get_first_gap(self, obs_idx: int, site: int) -> Union[int, None]:
         """
         Given an observation index, if it can be scheduled in this chromosome (the sites are compatible), determine
         the first gap in which it can be scheduled.
         """
         obs = self.observations[obs_idx]
-
+        #print(obs_idx,obs.site,site)
         if obs.site not in {Site.Both, Site.GS, Site.GN}:
             return None
 
@@ -45,18 +58,21 @@ class Chromosome:
         self._min_obs_slot_idx, self._max_obs_slot_idx = None, None
         
         if site == Site.GS:
+            #print(obs.start_slots,self.time_slots.num_time_slots_per_site[Site.GS],site, obs.site)
             self._min_obs_slot_idx = min(
                 [i for i in obs.start_slots if i < self.time_slots.num_time_slots_per_site[Site.GS]])
             self._max_obs_slot_idx = max(
                 [i for i in obs.start_slots if i < self.time_slots.num_time_slots_per_site[Site.GS]])
 
         elif site == Site.GN:
+            #print(obs.start_slots,self.time_slots.num_time_slots_per_site[Site.GS],site, obs.site)
             self._min_obs_slot_idx = min(
                 [i for i in obs.start_slots if self.time_slots.num_time_slots_per_site[Site.GS] <= i])
             self._max_obs_slot_idx = max(
                 [i for i in obs.start_slots if self.time_slots.num_time_slots_per_site[Site.GS] <= i])
        
-         
+        #print(f'min:{self._min_obs_slot_idx} max:{self._max_obs_slot_idx}')
+
         # Determine the number of time_slots we need to accommodate this observation.
         slots_needed = obs.time_slots_needed(self.time_slots)
 
@@ -66,11 +82,16 @@ class Chromosome:
         
         unused_time_slots = [time_slot_idx for time_slot_idx, obs_idx in enumerate(self.schedule[site]) if obs_idx is None
                              and time_slot_idx + offset in range(self._min_obs_slot_idx, self._max_obs_slot_idx + 1)]
-
+        #print('*** unused slots process ***')
+  
+        #print([(time_slot_idx,time_slot_idx+offset) for time_slot_idx, obs_idx in enumerate(self.schedule[site]) if obs_idx is None])
+        #print('*** END slots process ***')
+        #print(f'unused_time_slots: {unused_time_slots}')
         # Now iterate over the unused time slots and determine if this observation can be inserted in the position.
         for time_slot_idx in unused_time_slots:
             # Check to see if we have slots_needed empty slots starting at time_slot_idx.
             slots_to_check = self.schedule[site][time_slot_idx:(time_slot_idx + slots_needed)]
+
             if set(slots_to_check) == {None} and len(slots_to_check) == slots_needed:
                 return time_slot_idx
 
@@ -86,64 +107,54 @@ class Chromosome:
         offset = self.time_slots.num_time_slots_per_site[Site.GS] if site == Site.GN else 0
         time_slot_length = self.time_slots.time_slot_length.mins()
         
-        # Get all unused time windows 
-        unused_time_windows = []
-        time_window_head = None
-        for time_slot_idx, obs_id in enumerate(self.schedule[site]):
-            if obs_id is None:
-                if time_window_head is None:
-                    time_window_head = time_slot_idx
-                if time_slot_idx == len(self.schedule[site]) - 1:
-                    time_window = [idx for idx in range(time_window_head,time_slot_idx)]
-                    unused_time_windows.append(time_window)
-            elif time_window_head is not None:
-                    time_window = [idx for idx in range(time_window_head,time_slot_idx)]
-                    unused_time_windows.append(time_window)
-                    time_window_head = None
-        
-        # Check for the first unused time window
-        scheduble_slots = None
-        for time_window in unused_time_windows:
-            if len(time_window) * time_slot_length > 30 and obs.obs_time.mins() > len(time_window)* time_slot_length:
-                    scheduble_slots = time_window
-                    remaining_obs_time = ceil(obs.obs_time.mins() - len(scheduble_slots)* time_slot_length)
-                    break
-        if scheduble_slots is None: 
-            return None, None # No time window found for the obs to be schedule
-        
-        # Create new obs based on remaining obs time 
-        partial_obs = copy(obs)
-        partial_obs.obs_time = Time(remaining_obs_time) # TODO: Transform to Time object
-        windows_slots_idx = [scheduble_slots[0]]
-        is_partial_schedule = False
-        partial_lengths = []
 
-       # Check if partial obs can be schedule in the the same chromosome in another time?
-        for unused_time_window in unused_time_windows:
-            if partial_obs.obs_time.mins() <= len(unused_time_window) * time_slot_length \
-                and scheduble_slots != unused_time_window: 
-                    windows_slots_idx.append(unused_time_window[0])
-                    is_partial_schedule = True
-                    break
-        if not is_partial_schedule:
-            # or put it back in the pool? 
-            # TODO: Find a good way to do this actually, because if we move to the next chromosome with this partial obs in
-            # the pool it might affect the rest of the procedures. The main thing is find a way to carry the obs without 
-            # influecing the rest of the chromosomes  
-            self.observations[obs_idx] = partial_obs
-            return windows_slots_idx, [len(scheduble_slots)]
+        self._min_obs_slot_idx, self._max_obs_slot_idx = None, None
         
-        # Return new time_slot_idx of insertion and new length to be insert in the schedule
-        
-    return windows_slots_idx, [len(scheduble_slots), remaining_obs_time]
+        if site == Site.GS:
+            self._min_obs_slot_idx = min(
+                [i for i in obs.start_slots if i < self.time_slots.num_time_slots_per_site[Site.GS]])
+            self._max_obs_slot_idx = max(
+                [i for i in obs.start_slots if i < self.time_slots.num_time_slots_per_site[Site.GS]])
 
-    def determine_capacity(self) -> float:
+        elif site == Site.GN:
+            self._min_obs_slot_idx = min(
+                [i for i in obs.start_slots if self.time_slots.num_time_slots_per_site[Site.GS] <= i])
+            self._max_obs_slot_idx = max(
+                [i for i in obs.start_slots if self.time_slots.num_time_slots_per_site[Site.GS] <= i])
+        unused_time_slots = [time_slot_idx for time_slot_idx, obs_id in enumerate(self.schedule[site]) if obs_id is None
+                             and time_slot_idx + offset in range(self._min_obs_slot_idx, self._max_obs_slot_idx + 1)]       
+
+        if  len(unused_time_slots) < 1:
+              return None, None
+
+        unused_time_windows = [] #this might be done with comprehension. 
+        for i in range(len(unused_time_slots)):
+            if unused_time_slots[i-1]+1 == unused_time_slots[i]:
+                unused_time_windows[-1].append(unused_time_slots[i]) 
+            else:
+                 unused_time_windows.append([unused_time_slots[i]])
+
+        for tw in unused_time_windows:
+            if len(tw)*time_slot_length > 30: #check
+                slots_to_check = self.schedule[site][tw[0]:tw[-1]]
+                if set(slots_to_check) == {None} and (slots_needed - len(tw)) > 30:
+                    remaining_slots = slots_needed - len(tw)
+                    partial_obs = copy(obs)
+                    partial_obs.obs_time = Time(remaining_slots * time_slot_length)
+                    self.observations[obs_idx] = partial_obs
+                    self.partitions += 1
+                    return tw[0] , len(tw)
+       
+        return None, None
+        
+    def determine_capacity(self, site: int) -> float:
         """
         Determine the amount of time currently used up in this chromosome.
         >= 85% is considered "optimal."
         :return: True if optimal, and False otherwise.
         """
-        return len([i for i in self.schedule if i is not None]) / len(self.schedule) >= 0.85
+        #return len([i for i in self.schedule if i is not None]) / len(self.schedule) >= 0.85
+        return len([i for i in self.schedule[site] if i is not None])
 
     def determine_fitness(self) -> float:
         """
@@ -151,13 +162,7 @@ class Chromosome:
         the score for the times chosen.
         :return: the sum of the metric over the observations
         """
-        opt = 0 #debug mode
-        if opt:
-            return (calculate_scheduling_score(Site.GS,self.time_slots, self.observations, self.scheduling) + 
-            calculate_scheduling_score(Site.GN,self.time_slots, self.observations, self.scheduling))
-
-        full_schedule = self.schedule[0]+self.schedule[1]
-        return calculate_schedule_score(self.time_slots, self.observations,full_schedule)
+        return calculate_scheduling_score(Site.Both, self.time_slots, self.observations, self.scheduling)
 
     def insert(self, obs_idx, site) -> bool:
         """
@@ -175,29 +180,43 @@ class Chromosome:
         if site not in {Site.Both, Site.GS, Site.GN}:
             return False
         
-        if obs_idx in self.schedule[site]: # TODO: Must change this
-            return False
-        # Get the gaps into which we can insert.
+        #Check for the obs in both sites so its not duplicated or if 
+        for s in {Site.GS, Site.GN}:
+            if obs_idx in self.schedule[s]: # TODO: Must change this
+                return False
+        
+        # Get the gaps into which we can insert.    
         start_time_slot_idx = self._get_first_gap(obs_idx, site)
-
+        #print(f'obs site: {obs.site.name}, {site.name}, start_ts: {start_time_slot_idx}') 
         if start_time_slot_idx is None:
+            
             # Check if the observation can be split in partial obs 
-            partial_time_slots_idx, partial_lengths = self._split_observation(obs_idx, site)
-            if partial_time_slots_idx:
+            partial_time_slot_idx, slots_needed = self._split_observation(obs_idx, site)
+            if partial_time_slot_idx:
+                #print(f'{obs_idx} partially inserted')
                 # Add partials obs to the scheduling 
                 #print(partial_time_slots_idx,partial_lengths)
                 #print(f'Initial Schedule => {self.schedule[site]}')
-                for time_slot_idx, slots_needed in zip(partial_time_slots_idx,partial_lengths):
-                    self.schedule[site][time_slot_idx:(time_slot_idx + slots_needed)] = [obs_idx]* slots_needed
-                    self.scheduling.append((time_slot_idx, obs_idx))
-
+                #print(f'Initial Schedule => {self.schedule[site]}')
+                self.scheduling[site].append((partial_time_slot_idx, obs_idx))
+                self.scheduling[site].sort()
+                self.schedule[site][partial_time_slot_idx:(partial_time_slot_idx 
+                                                            + slots_needed)] = [obs_idx]* slots_needed
+                #for time_slot_idx, slots_needed in zip(partial_time_slots_idx,partial_lengths):
+                #    self.scheduling[site].append((time_slot_idx, obs_idx))
+                #    self.scheduling[site].sort()
+                #    self.schedule[site][time_slot_idx:(time_slot_idx + slots_needed)] = [obs_idx]* slots_needed
+                
+                #print(partial_time_slots_idx,partial_lengths)
                 #print(f'Final Schedule => {self.schedule[site]}')    
                 #x = input()
-                return True
-            return False
+                #return True
+            #print(f'{obs_idx} not inserted')
 
-        self.scheduling.append((start_time_slot_idx, obs_idx))
-        self.scheduling.sort()
+            return False
+        #print(f'{obs_idx} inserted')
+        self.scheduling[site].append((start_time_slot_idx, obs_idx))
+        self.scheduling[site].sort()
 
         # Determine the number of time_slots we need to accommodate this observation and modify the schedule array
         # so that it represents obs_idx being scheduled for slots_needed positions starting at start_time_slot_idx.
@@ -212,34 +231,49 @@ class Chromosome:
         :param obs_idx: the observation to remove
         :return: True if it can be removed, and False otherwise.
         """
-        site_schedule = self.schedule[site] 
-        if obs_idx in site_schedule:
-            self.schedule[site] = [i if i != obs_idx else None for i in site_schedule]
-            self.scheduling = [(i, j) for (i, j) in self.scheduling if j != obs_idx]
+
+        if obs_idx in  self.schedule[site]:
+            self.schedule[site] = [i if i != obs_idx else None for i in self.schedule[site]]
+            self.scheduling[site] = [(i, j) for (i, j) in self.scheduling[site] if j != obs_idx]
             return True
         return False
 
     def __len__(self):
         """
-        Return the number of observations in this schedule.
+        Return the number of observations in this schedule by.
         :return:
         """
-        #return len(self.scheduling)
-        return  len(self.schedule[0])+len(self.schedule[1])
+        return len(self.scheduling[self.on_site])
+        #return  len(self.schedule[0])+len(self.schedule[1])
 
     def __getitem__(self, idx) -> int:
         """
         Return the idxth overvation in this chromosome.
         """
-        #return self.scheduling[idx][1]
-        return self.schedule[idx] ## TODO: see diference between accesing schedule vs scheduling
+        return self.scheduling[self.on_site][idx][1]
+    
+    def __str__(self) -> str:
+        return f'fitness: {self.determine_fitness():.6} '+ \
+                 f'GS cap: {self.determine_capacity(Site.GS)}/{self.time_slots.num_time_slots_per_site[Site.GS]} '+ \
+                 f'GN cap: {self.determine_capacity(Site.GN)}/{self.time_slots.num_time_slots_per_site[Site.GN]} '+ \
+                 f'\nSched: {self.scheduling}'
+    def __contains__(self, idx) -> bool:
+        return True if idx in self.schedule[self.on_site] else False
 
-class GeneticAlgortihm:
+class GeneticAlgorithm:
     def __init__(self, time_slots: TimeSlots, observations: List[Observation], include_greedy_max=False):
         self.time_slots = time_slots
         self.observations = observations
         self.chromosomes = [] #{Site.GS: [], Site.GN: []}
         self.include_greedy_max = include_greedy_max
+        self.swaps = 0
+        self.mixes = 0
+        self.mates = 0
+        self.interleaves = 0 
+        self.improve_swap = 0
+        self.improve_mix = 0
+        self.improve_mate = 0
+        self.improve_inter = 0   
 
     def _form_initial_population(self):
         """
@@ -253,17 +287,22 @@ class GeneticAlgortihm:
         #                                                      reverse=True)]
         sorted_obs_idx_by_score = [obs.idx for obs in sorted(self.observations,
                                                              key=lambda x: max(x.weights) * x.obs_time.mins())]
-        
+        #print(f'slots for GN: {self.time_slots.num_time_slots_per_site[Site.GN]},\
+        #        slots for GS: {self.time_slots.num_time_slots_per_site[Site.GS]}')
         for obs_idx in sorted_obs_idx_by_score:
             obs = self.observations[obs_idx]
-            
+            #print(f'Inserting {obs.idx} slots needed: {obs.time_slots_needed(self.time_slots)}')
             # Determine the sites in which it should be scheduled.
             sites = {Site.GN, Site.GS} if obs.site == Site.Both else {obs.site}
             gs_sched, gn_sched = 0, 0
             for site in sites:
                 scheduled = False   
                 for chromosome in self.chromosomes:
+                    #print(f'chromosome time left for {site.name}: {chromosome.determine_capacity(site)} chromosome fitness: {chromosome.determine_fitness():.6f}')
+                    #print(f'score on gs: {calculate_scheduling_score(Site.GS, self.time_slots, self.observations, chromosome.scheduling):.7f} score on gn: {calculate_scheduling_score(Site.GN, self.time_slots, self.observations, chromosome.scheduling):.7f}')
                     if chromosome.insert(obs_idx,site):
+                        #print(f'{obs.idx} inserted in existing chromosome at {site.name}')
+                        #print(f'chromosome new fitness: {chromosome.determine_fitness():.6f}')
                         scheduled = True
                         break
                 if scheduled and site == Site.GS:
@@ -274,33 +313,41 @@ class GeneticAlgortihm:
                 # Create a new Chromosome for this site and insert it.   
                 if not scheduled:
                     c = Chromosome(self.time_slots, self.observations)
+                    #print("create a new chromosome")
+                    #print(f'{obs.idx} inserted in new chromosome at {site.name}')
+                    #print(c.schedule)
+                    #print(obs.site,site)
                     if c.insert(obs_idx,site):
                         self.chromosomes.append(c)
                     else:
                         raise ValueError(f'{obs_idx} could not be scheduled at {Site(obs.site).name}')
             self._sort_chromosomes()
-
-        # if self.include_greedy_max:
+            #input()
+        #self._print_population()
+        #if self.include_greedy_max:
         #     # Add Bryan's chromosome to the GA.
-        #     b1_scheduling = [(1, find('GS-2018B-Q-224-34')), (7, find('GS-2018B-Q-207-48')),
-        #                      (44, find('GS-2018B-Q-218-342')), (87, find('GS-2018B-Q-218-363')),
-        #                      (124, find('GS-2019A-Q-229-10')), (129, find('GS-2018B-Q-112-24')),
-        #                      (142, find('GS-2018B-Q-112-25')), (157, find('GS-2018B-Q-112-26'))]
-        #     b1_chromosome = Chromosome(self.time_slots, self.observations, Site.GS)
-        #     b1_chromosome.schedule = convert_to_schedule(self.time_slots, self.observations, b1_scheduling)
-        #     b1_chromosome.scheduling = b1_scheduling
-        #     self.chromosomes.append(b1_chromosome)
-        #     print(f'Greedy-max chromosome: fitness: {b1_chromosome.determine_fitness()}, '
+
+        #    ggmx_out = {Site.GS: ['GN-2019A-FT-101-9', 'GS-2018B-Q-218-342', 'GN-2018B-Q-238-116',
+        #                          'GN-2019A-Q-903-71', 'GS-2018B-Q-224-34'], 
+        #                Site.GN: ['GN-2018B-Q-228-31', 'GS-2018B-Q-131-16',
+        #                          'GS-2018B-Q-207-62', 'GN-2019A-Q-229-9']}
+        #    gm_scheduling = {Site.GS: [], Site.GN: []}          
+        #    for obs in self.observations:
+        #        if obs.name in ggmx_out[obs.site]:
+        #            gm_scheduling[obs.site].append((,obs_idx))
+            
+
+        #    g1_scheduling = [gm_scheduling[Site.GS],gm_scheduling[Site.GN]]
+        #    g1_chromosome = Chromosome(self.time_slots, self.observations)
+        #    g1_chromosome.schedule = convert_to_schedule(self.time_slots, self.observations, g1_scheduling)
+        #    g1_chromosome.scheduling = g1_scheduling
+        #    self.chromosomes.append(b1_chromosome)
+        #    print(f'Greedy-max chromosome: fitness: {g1_chromosome.determine_fitness()}, '
         #           f'score: {calculate_scheduling_score(self.time_slots, self.observations, b1_scheduling)}')
         #
-        #     self._sort_chromosomes()
+        #   self._sort_chromosomes()
 
     def _sort_chromosomes(self):
-        
-        #self.chromosomes = {Site.GS: sorted(self.chromosomes[Site.GS],
-        #                                    key=lambda x: x.determine_fitness(), reverse=True),
-        #                    Site.GN: sorted(self.chromosomes[Site.GN],
-        #                                    key=lambda x: x.determine_fitness(), reverse=True)}
         self.chromosomes = sorted(self.chromosomes,
                                             key=lambda x: x.determine_fitness(), reverse=True)
 
@@ -335,54 +382,64 @@ class GeneticAlgortihm:
 
         :return: True if mating succeeded, False otherwise.
         """
+
         c1_index, c2_index = self._pair_selection()
         c1 = self.chromosomes[c1_index]
         c2 = self.chromosomes[c2_index]
 
-        # Pick a crossover point. We want some of each chromosome, so pick between [1, len-1].
-        # If either is too short, we can't mate.
-        if len(c1) <= 1 or len(c2) <= 1:
-            return False
-
-        # Pick a point from the scheduling from c1 and c2.
-        c1_point_gn = randrange(1, len(c1[0]))
-        c2_point_gn = randrange(1, len(c2[0]))
-        c1_point_gs = randrange(1, len(c1[1]))
-        c2_point_gs = randrange(1, len(c2[1]))
-
         c3 = Chromosome(self.time_slots, self.observations)
-        for i in range(c1_point_gn):    
-            c3.insert(c1[0][i],Site.GN)
-        for i in range(c2_point_gs, len(c2[0])):
-            c3.insert(c2[0][i],Site.GN)
-        for i in range(c1_point_gs):
-            c3.insert(c1[1][i],Site.GS)
-        for i in range(c2_point_gs, len(c2[1])):
-            c3.insert(c2[1][i],Site.GS)
-    
         c4 = Chromosome(self.time_slots, self.observations)
-        for i in range(c2_point_gn):
-            c4.insert(c2[0][i],Site.GN)
-        for i in range(c1_point_gn, len(c1[0])):
-            c4.insert(c1[0][i],Site.GN)
-        for i in range(c2_point_gs):
-            c4.insert(c2[1][i],Site.GS)
-        for i in range(c1_point_gs, len(c1[1])):
-            c4.insert(c1[1][i],Site.GS)
+        for site in {Site.GN,Site.GS}:
+            
+            c1.on_site = c2.on_site = c3.on_site = c4.on_site = site
+            
+            # Pick a crossover point. We want some of each chromosome, so pick between [1, len-1].
+            # If either is too short, we can't mate.
+            if len(c1) <= 1 or len(c2) <= 1:
+                return False
+
+
+            # Pick a point from the scheduling from c1 and c2.
+            c1_point = randrange(1, len(c1))
+            c2_point = randrange(1, len(c2))
+
+            for i in range(c1_point):
+                c3.insert(c1[i], site)
+            for i in range(c2_point, len(c2)):
+                if c2[i] not in set(c3.schedule[site]):
+                    c3.insert(c2[i], site)
+
+            for i in range(c2_point):
+                c4.insert(c2[i], site)
+            for i in range(c1_point, len(c1)):
+                if c1[i] not in set(c4.schedule[site]): 
+                    c4.insert(c1[i], site)
+            
+        # Reset site variable
+        c1.on_site = c2.on_site = c3.on_site = c4.on_site = None 
         
+        #print('MATING PROCESS')
+        #print('Chromosomes to interleave:')
+        #print(f'c1 {c1}')
+        #print(f'c2 {c2}')
+        #print('New breed chromosomes :')
+        #print(f'c3 {c3}')
+        #print(f'c4 {c4}')
+        self.mates += 1
+
         #If we have improvement in one of the matings, then replace the lower-valued chromosome.
         max_c = c3 if c3.determine_fitness() > c4.determine_fitness() else c4
         if max_c.determine_fitness() > c2.determine_fitness() and not self._contains(max_c):
             self.chromosomes[c2_index] = max_c
             self._sort_chromosomes()
+            self.improve_mate+=1
             return True
 
         return False
 
     def _contains(self, c: Chromosome):
         for c2 in self.chromosomes:
-            #if c.scheduling == c2.scheduling:
-            if c.schedule == c2.schedule:
+            if c.scheduling == c2.scheduling:
                 return True
         return False
 
@@ -393,22 +450,34 @@ class GeneticAlgortihm:
         c1_index, c2_index = self._pair_selection()
         c1 = self.chromosomes[c1_index]
         c2 = self.chromosomes[c2_index]
-
-        # Interleave to produce the chromosomes.
+        
         c3 = Chromosome(self.time_slots, self.observations)
         c4 = Chromosome(self.time_slots, self.observations)
-        for i in range(min(len(c1[0]), len(c2[0]))):
-            c3.insert(c1[0][i] if i % 2 == 0 else c2[0][i],Site.GN)
-            c4.insert(c2[0][i] if i % 2 == 0 else c1[0][i],Site.GN)
-        for i in range(min(len(c1[1]), len(c2[1]))):
-            c3.insert(c1[1][i] if i % 2 == 0 else c2[1][i],Site.GS)
-            c4.insert(c2[1][i] if i % 2 == 0 else c1[1][i],Site.GS)
+        # Interleave to produce the chromosomes.
+        for site in {Site.GN,Site.GS}:
+            c1.on_site = c2.on_site = c3.on_site = c4.on_site = site
 
+            for i in range(min(len(c1), len(c2))):
+                c3.insert(c1[i] if i % 2 == 0 and c1[i] not in c2 else c2[i], site)
+                c4.insert(c2[i] if i % 2 == 0 and c2[i] not in c1 else c1[i], site)
+        
+        c1.on_site = c2.on_site = c3.on_site = c4.on_site = None 
+
+        #print('INTERLEAVE PROCESS')
+        #print('Chromosomes to interleave:')
+        #print(f'c1 {c1}')
+        #print(f'c2 {c2}')
+        #print('New breed chromosomes :')
+        #print(f'c3 {c3}')
+        #print(f'c4 {c4}')
+        self.interleaves += 1
+        
         # If we have improvement in one of the crossovers, then replace the lower-valued chromosome.
         max_c = c3 if c3.determine_fitness() > c4.determine_fitness() else c4
         if max_c.determine_fitness() > c2.determine_fitness() and not self._contains(max_c):
             self.chromosomes[c2_index] = max_c
             self._sort_chromosomes()
+            self.improve_inter += 1
             return True
 
         return False
@@ -420,30 +489,36 @@ class GeneticAlgortihm:
         c_idx = self._single_selection()
         c = self.chromosomes[c_idx]
 
-        if len(c) < 2:
-            return False
-
-        # Sample two observations to swap.
-        # This only works if the re-add switches the order.
-        pos1, pos2 = sample(range(len(c[0])), 2)
-        pos3, pos4 = sample(range(len(c[1])), 2)
-        pos1, pos2 = (pos1, pos2) if pos1 > pos2 else (pos2, pos1)
-        pos3, pos4 = (pos3, pos4) if pos3 > pos4 else (pos4, pos3)
         new_c = copy(c)
-        new_c.remove(pos1, Site.GN)
-        new_c.remove(pos2, Site.GN)
-        new_c.remove(pos3, Site.GS)
-        new_c.remove(pos4, Site.GS)
-        new_c.insert(c[0][pos2], Site.GN)
-        new_c.insert(c[0][pos1], Site.GN)
-        new_c.insert(c[1][pos4], Site.GS)
-        new_c.insert(c[1][pos3], Site.GS)
-        # if new_c.scheduling == c.scheduling:
-        #     return False
+        for site in {Site.GN,Site.GS}:
 
+            c.on_site = new_c.on_site =site
+            if len(c) < 2:
+                return False
+
+            # Sample two observations to swap.
+            # This only works if the re-add switches the order.
+            pos1, pos2 = sample(range(len(c)), 2)
+            pos1, pos2 = (pos1, pos2) if pos1 > pos2 else (pos2, pos1)
+
+            new_c.remove(pos1, site)
+            new_c.remove(pos2, site)
+    
+            new_c.insert(c[pos2], site)
+            new_c.insert(c[pos1], Site)
+ 
+            # if new_c.scheduling == c.scheduling:
+            #     return False
+
+        c.on_site = new_c.on_site = None
+        #print("SWAP MUTATOR")
+        #print(f'old chromosome {c}')
+        #print(f'new chromosome {new_c}')
+        self.swaps += 1
         if new_c.determine_fitness() > c.determine_fitness() and not self._contains(new_c):
             self.chromosomes[c_idx] = new_c
             self._sort_chromosomes()
+            self.improve_swap += 1
             return True
 
         return False
@@ -454,34 +529,40 @@ class GeneticAlgortihm:
         """
         c_idx = self._single_selection()
         c = self.chromosomes[c_idx]
-
-        if len(c) <= 1:
-            return False
-
         new_c = copy(c)
-        n = randrange(1, len(c[0]))
 
-        # Pick n random observation indices from c to drop.
-        obs_idx_to_drop_on_north = sample([obs_idx for obs_idx in c.schedule[0]], n)
-        for obs_idx in obs_idx_to_drop_on_north:
-            new_c.remove(obs_idx, Site.GN)
-        n = randrange(1, len(c[1]))
-        obs_idx_to_drop_on_south = sample([obs_idx for obs_idx in c.schedule[1]], n)
-        for obs_idx in obs_idx_to_drop_on_south:
-            new_c.remove(obs_idx, Site.GS)
+        for site in {Site.GN,Site.GS}:
+            c.on_site = new_c.on_site = site
+            #print(len(c))
+             
+            if len(c) <= 1:
+                return False
+            n = randrange(1, len(c))
+            
+            # Pick n random observation indices from c to drop.
+            obs_idx_to_drop = sorted(sample([obs_idx for _, obs_idx in c.scheduling[site]], n), reverse=True)
+            for obs_idx in obs_idx_to_drop:
+                new_c.remove(obs_idx, site)
 
-        # Pick n random observation indices to try to insert.
-        candidates = self.observations # [o for o in self.observations if o.site in {Site.GS, Site.Both}]
-        obs_idx_to_add = sample(range(len(candidates)), min(len(candidates), n))
-        for obs_idx in obs_idx_to_add:
-            if self.observations[obs_idx].site == Site.GN:
-                new_c.insert(obs_idx, Site.GN)
-            elif self.observations[obs_idx].site == Site.GS:
-                new_c.insert(obs_idx, Site.GS)
-
+            # Pick n random observation indices to try to insert.
+            candidates = [o.idx for o in self.observations if o.site in {site, Site.Both}]
+            #print(len(candidates),n)
+            #obs_idx_to_add = sample(range(len(candidates)), min(len(candidates), n))
+            obs_idx_to_add = sample(candidates,n)
+            #print([self.observations[obss].site for obss in obs_idx_to_add])
+            #print(site)
+            for obs_idx in obs_idx_to_add:
+               new_c.insert(obs_idx, site)
+        
+        c.on_site = new_c.on_site = None
+        #print("MIX MUTATOR")
+        #print(f'old chromosome {c}')
+        #print(f'new chromosome {new_c}')
+        self.mixes += 1
         if new_c.determine_fitness() > c.determine_fitness() and not self._contains(new_c):
             self.chromosomes[c_idx] = new_c
             self._sort_chromosomes()
+            self.improve_mix +=1
             return True
 
         return False
@@ -512,28 +593,60 @@ class GeneticAlgortihm:
         return False
 
     def _print_best_fitness(self, sites: List[Site], i: int = None) -> None:
+        c = self.chromosomes[0]
         for site in sites:
-            c = self.chromosomes[site][0]
-            print(f"Best fitness for {c.site.name}{f' iteration {i}' if i is not None else ''}: {c.determine_fitness()} {c.scheduling}")
+            print(f"Best fitness for {site.name}{f' iteration {i}' if i is not None else ''}: {c.determine_fitness()} {c.scheduling[site]}")
 
     def _print_chromosomes(self) -> None:
         for c in self.chromosomes:
-            print('For GN')
-            print(','.join([str(x) for x in c.schedule[0]]))
-            print('For GS')
-            print(','.join([str(x) for x in c.schedule[1]]))
+            
+            sched = []
+            print(f'Fitness: {c.determine_fitness()}')
+            print('GS')
+            print(f'len: {len(c.schedule[Site.GS])}')
+            for i in c.schedule[Site.GS]:
+                if i:
+                    sched.append(colored(i,'grey','on_white'))
+                else:
+                    sched.append(colored('F','white','on_white'))
+            t = colored(',','white','on_white')
+            print(f'{t}'.join(sched))
+            sched = []
+            print('GN')
+            print(f'len: {len(c.schedule[Site.GN])}')
+            for i in c.schedule[Site.GN]:
+                if i:
+                    sched.append(colored(i,'grey','on_white'))
+                else:
+                    sched.append(colored('F','white','on_white'))
+            t = colored(',','white','on_white')
+            print(f'{t}'.join(sched))
             input()
+
+    def _print_population(self) -> None:
+
+        for i, c in enumerate(self.chromosomes):
+            print(f'chromosome {i} fitness: {c.determine_fitness():.6}'+
+                 f'GS cap: {c.determine_capacity(Site.GS)}/{self.time_slots.num_time_slots_per_site[Site.GS]} '+
+                 f'GN cap: {c.determine_capacity(Site.GN)}/{self.time_slots.num_time_slots_per_site[Site.GN]} '+
+                 f'Partials obs: {c.partitions}')
+         
+            print(f'{c.scheduling}')
+        input()
 
     def _run(self, max_iterations_without_improvement) -> Union[None, Chromosome]:
         """
         The meat of the run algorithm. We do this twice: once to get a chromosome for each site as described in the
         run method.
         """
+
+        
+
         self._sort_chromosomes()
         #best_c_gs = None if len(self.chromosomes[Site.GS]) == 0 or Site.GS not in sites else copy(self.chromosomes[Site.GS][0])
         #best_c_gn = None if len(self.chromosomes[Site.GN]) == 0 or Site.GN not in sites else copy(self.chromosomes[Site.GN][0])
         best_c = None if len(self.chromosomes) == 0 else copy(self.chromosomes[0])
-
+        sites = {Site.GS, Site.GN}
         # Count the chromosomes at each site.
         #gs_chromosomes = len(self.chromosomes[Site.GS])
         #gn_chromosomes = len(self.chromosomes[Site.GN])
@@ -546,11 +659,13 @@ class GeneticAlgortihm:
             # print(f'GN chromosomes: {len(self.chromosomes[Site.GN])}')
             
             #pass
+            
             self._mate()
             self._interleave()
             self._mutation_swap()
             self._mutation_mix()
             #self._shuffle()
+            #input()
             # print(f'GS chromosomes: {len([c for c in self.chromosomes if c.site == Site.GS])}')
             # print(f'GN chromosomes: {len([c for c in self.chromosomes if c.site == Site.GN])}')
             # print('*** DONE ITERATION ***')
@@ -573,7 +688,7 @@ class GeneticAlgortihm:
                 improvement = True
 
             if improvement:
-                #self._print_best_fitness(sites, counter)
+                self._print_best_fitness(sites, counter)
                 counter = 0
             else:
                 counter += 1
@@ -585,7 +700,7 @@ class GeneticAlgortihm:
         #    return Site.GN, copy(best_c_gn)
         #else:
         #    return None
-
+        
         if best_c is not None:
             return copy(best_c)
         else:
@@ -603,21 +718,21 @@ class GeneticAlgortihm:
         :return: two chromosomes, one for GN and one for GS
         """
         self._form_initial_population()
-        #self._print_chromosomes()
+        self._print_population()
         #ites = ([Site.GS] if len(self.chromosomes[Site.GS]) > 0 else 0) + \
         #        ([Site.GN] if len(self.chromosomes[Site.GN]) > 0 else 0)
 
         # Check that everything is scheduled.
-        # obs_in_gs_chroms = len(set([obs_idx for c in self.chromosomes[Site.GS] for _, obs_idx in c.scheduling]))
-        # obs_in_gn_chroms = len(set([obs_idx for c in self.chromosomes[Site.GN] for _, obs_idx in c.scheduling]))
-        # gs_obs = len([obs for obs in self.observations if obs.site == Site.GS])
-        # gn_obs = len([obs for obs in self.observations if obs.site == Site.GN])
-        # gb_obs = len([obs for obs in self.observations if obs.site == Site.Both])
+        obs_in_gs_chroms = len(set([obs_idx for c in self.chromosomes for _, obs_idx in c.scheduling[Site.GS]]))
+        obs_in_gn_chroms = len(set([obs_idx for c in self.chromosomes for _, obs_idx in c.scheduling[Site.GN]]))
+        gs_obs = len([obs for obs in self.observations if obs.site == Site.GS])
+        gn_obs = len([obs for obs in self.observations if obs.site == Site.GN])
+        gb_obs = len([obs for obs in self.observations if obs.site == Site.Both])
 
-        # print(f'obs_in_gs_chroms={obs_in_gs_chroms}, gs_obs={gs_obs}, both={gb_obs}, total={gs_obs + gb_obs}')
-        # print(f'obs_in_gn_chroms={obs_in_gn_chroms}, gn_obs={gn_obs}, both={gb_obs}, total={gn_obs + gb_obs}')
-        # assert(obs_in_gs_chroms == gs_obs + gb_obs)
-        # assert(obs_in_gn_chroms == gn_obs + gb_obs)
+        #print(f'obs_in_gs_chroms={obs_in_gs_chroms}, gs_obs={gs_obs}, both={gb_obs}, total={gs_obs + gb_obs}')
+        #print(f'obs_in_gn_chroms={obs_in_gn_chroms}, gn_obs={gn_obs}, both={gb_obs}, total={gn_obs + gb_obs}')
+        #assert(obs_in_gs_chroms == gs_obs + gb_obs)
+        #assert(obs_in_gn_chroms == gn_obs + gb_obs)
 
         # print(f'GS obs: {gs_obs}, GN obs: {gn_obs}, Both: {gb_obs}')
         # print('\nGS Initial Chromosomes')
@@ -631,6 +746,12 @@ class GeneticAlgortihm:
 
         #best_c_gn = None
         best_c = self._run(max_iterations_without_improvement)
+        
+        print('Total operations done'+ 
+              f'\nMate\nDone: {self.mates}\tImprove: {self.improve_mate}'+
+              f'\nInterleave\nDone: {self.interleaves}\tImprove: {self.improve_inter}'+ 
+              f'\nMutator Swap\nDone: {self.swaps}\tImprove: {self.improve_swap}'+
+              f'\nMutator Mix\nDone: {self.mixes}\tImprove: {self.improve_mix}')
         #best_c_gs = None
 
         #results = self._run(max_iterations_without_improvement)

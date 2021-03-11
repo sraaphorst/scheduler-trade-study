@@ -2,7 +2,7 @@
 
 from common import *
 from typing import Union
-
+from termcolor import colored
 
 def convert_to_schedule(site: Site,
                         time_slots: TimeSlots,
@@ -24,7 +24,7 @@ def convert_to_schedule(site: Site,
     return schedule
 
 
-def convert_to_scheduling(site:Site, schedule: Union[None, Schedule]) -> Union[None, Scheduling]:
+def convert_to_scheduling(schedule: Union[None, Schedule]) -> Union[None, Scheduling]:
     """
     Convert a schedule to the easier-to-read scheduling.
     Here is an example schedule:
@@ -45,49 +45,21 @@ def convert_to_scheduling(site:Site, schedule: Union[None, Schedule]) -> Union[N
     """
     if schedule is None:
         return None
-
-    scheduling = []
+    scheduling = [[],[]]
     prev_obs_idx = None
-
-    for time_slot_idx, obs_idx in enumerate(schedule[site]):
-        if obs_idx is None:
-            continue
-        if prev_obs_idx is None or prev_obs_idx != obs_idx:
-            prev_obs_idx = obs_idx
-            scheduling.append((time_slot_idx, obs_idx))
+    for site in {Site.GS,Site.GN}:
+        for time_slot_idx, obs_idx in enumerate(schedule[site]):
+            if obs_idx is None:
+                continue
+            if prev_obs_idx is None or prev_obs_idx != obs_idx:
+                prev_obs_idx = obs_idx
+                scheduling[site].append((time_slot_idx, obs_idx))
 
     if len(scheduling) == 0:
         return None
 
     return scheduling
 
-'''
-def calculate_observation_score(site: Site,
-                                time_slots: TimeSlots,
-                                obs: Observation,
-                                initial_slot_idx: int) -> Union[None, float]:
-    """
-    Given an observation at a site scheduled for a time slot, calculate its score.
-    """
-    if obs is None:
-        return None
-    time_slots_needed = obs.time_slots_needed(time_slots)
-
-    score = 0
-    time_slot = time_slots.get_time_slot(site, initial_slot_idx)
-    if time_slot:
-        # Huge assumption here: when a time_slot does not exit by any index then the score is 0 making it not scheduble... 
-        # This might be correct or a bug on how the timeslot are associated with the site
-        #print(f'idx: {time_slot.idx}')
-        overall_time_slot_index =  time_slot.idx 
-        time_slot_length = time_slots.time_slot_length.mins()
-        for time_slot_idx in range(time_slots_needed):
-            score += obs.weights[time_slot_idx + overall_time_slot_index] * time_slot_length
-        return score
-    else:
-        return 0
-
-'''
 def calculate_observation_score(site: Site,
                                 time_slots: TimeSlots,
                                 obs: Observation,
@@ -106,17 +78,12 @@ def calculate_observation_score(site: Site,
         score += obs.weights[time_slot_idx + overall_time_slot_index] * time_slot_length
     return score
 
-def length_of_night_in_mins(time_slots: TimeSlots) -> float:
+def length_of_night_in_mins(site: Site, time_slots: TimeSlots) -> float:
     """
     Returns the length of the night for the given site in minutes.
     """
-    return (time_slots.num_time_slots_per_site[Site.GS]+time_slots.num_time_slots_per_site[Site.GN])*time_slots.time_slot_length.mins()
+    return time_slots.num_time_slots_per_site[site] * time_slots.time_slot_length.mins()
 
-def length_of_night_in_mins_by_site(time_slots: TimeSlots, site: Site) -> float:
-    """
-    Returns the length of the night for the given site in minutes.
-    """
-    return time_slots.num_time_slots_per_site[site]*time_slots.time_slot_length.mins()
 
 def calculate_schedule_score(time_slots: TimeSlots,
                              observations: List[Observation],
@@ -132,13 +99,18 @@ def calculate_schedule_score(time_slots: TimeSlots,
                 for time_slot_idx, obs_idx in enumerate(schedule)
                 if obs_idx is not None)) / length_of_night_in_mins(time_slots)
 
-def calculate_scheduling_score(site: Site, time_slots: TimeSlots,
+def calculate_scheduling_score(site: Site, 
+                               time_slots: TimeSlots,
                                observations: List[Observation],
                                scheduling: Union[None, Scheduling]) -> Union[None, float]:
     if scheduling is None:
         return None
+    
+    if site == Site.Both:
+        return calculate_scheduling_score(Site.GS, time_slots, observations , scheduling) + \
+                calculate_scheduling_score(Site.GN, time_slots, observations, scheduling)
     return sum([calculate_observation_score(site, time_slots, observations[obs_idx], start_slot)
-                for start_slot, obs_idx in scheduling]) / length_of_night_in_mins_by_site(time_slots, site)
+                for start_slot, obs_idx in scheduling[site]]) / length_of_night_in_mins(site, time_slots)
 
 
 def print_schedule(site: Site, time_slots: TimeSlots, observations: List[Observation], schedule: Schedule) -> None:
@@ -223,7 +195,7 @@ def _detailed_scheduling(name: Union[None, str],
         obs_prev_time = obs_start_time + observations[obs_idx].obs_time.mins()
 
     # Is there a final gap at the end of the schedule?
-    gap_size = int(length_of_night_in_mins_by_site(time_slots,site) - obs_prev_time)
+    gap_size = int(length_of_night_in_mins(site, time_slots) - obs_prev_time)
     if gap_size > 0e-3:
         data += line_start + f'Gap of  {gap_size:>3} min{"s" if gap_size > 1 else ""}'
 
@@ -247,7 +219,7 @@ def print_schedule2(time_slots: TimeSlots, observations: List[Observation],
 
     gn_obs = set([obs_idx for obs_idx in gn_schedule if obs_idx is not None])
     gn_usage = sum(observations[obs_idx].obs_time.mins() for obs_idx in gn_obs)
-    gn_pct = gn_usage / length_of_night_in_mins_by_site(Site.GN, time_slots) * 100
+    gn_pct = gn_usage / length_of_night_in_mins(Site.GN, time_slots) * 100
     gn_score = calculate_scheduling_score(Site.GN, time_slots, observations, gn_sched)
     gn_summary = f'\tUsage: {gn_usage}, {gn_pct}%, Score: {gn_score}'
     print(gn_summary + '\n')
@@ -258,26 +230,26 @@ def print_schedule2(time_slots: TimeSlots, observations: List[Observation],
 
     gs_obs = set([obs_idx for obs_idx in gs_schedule if obs_idx is not None])
     gs_usage = sum(observations[obs_idx].obs_time.mins() for obs_idx in gs_obs)
-    gs_pct = gs_usage / length_of_night_in_mins_by_site(Site.GS, time_slots) * 100
+    gs_pct = gs_usage / length_of_night_in_mins(Site.GS, time_slots) * 100
     gs_score = calculate_scheduling_score(Site.GS, time_slots, observations, gs_sched)
     gs_summary = f'\tUsage: {gs_usage} mins, {gs_pct}%, Score: {gs_score}'
     print(gs_summary)
 
 def print_schedule3(time_slots: TimeSlots, observations: List[Observation], schedule: Schedule) -> None:
 
-    gn_sched = convert_to_scheduling(Site.GN,schedule)
-    gs_sched = convert_to_scheduling(Site.GS,schedule)
+    sched = convert_to_scheduling(schedule)
+    gn_sched = sched[Site.GN]
+    gs_sched = sched[Site.GS]
     gn_schedule, gs_schedule  = schedule[0],schedule[1]
 
     # *** GN ***
     printable_schedule_gn = _detailed_scheduling("Gemini North:", Site.GN, gn_sched, time_slots, observations)
     print(printable_schedule_gn)
 
-    
     gn_obs = set([obs_idx for obs_idx in gn_schedule if obs_idx is not None])
     gn_usage = sum(observations[obs_idx].obs_time.mins() for obs_idx in gn_obs)
-    gn_pct = gn_usage / length_of_night_in_mins_by_site(time_slots, Site.GN) * 100
-    gn_score = calculate_scheduling_score(Site.GN, time_slots, observations, gn_sched)
+    gn_pct = gn_usage / length_of_night_in_mins(Site.GN,time_slots) * 100
+    gn_score = calculate_scheduling_score(Site.GN, time_slots, observations, sched)
     gn_summary = f'\tUsage: {gn_usage}, {gn_pct}%, Score: {gn_score}'
     print(gn_summary + '\n')
 
@@ -287,8 +259,28 @@ def print_schedule3(time_slots: TimeSlots, observations: List[Observation], sche
 
     gs_obs = set([obs_idx for obs_idx in gs_schedule if obs_idx is not None])
     gs_usage = sum(observations[obs_idx].obs_time.mins() for obs_idx in gs_obs)
-    gs_pct = gs_usage / length_of_night_in_mins_by_site(time_slots, Site.GS) * 100
-    gs_score = calculate_scheduling_score(Site.GS, time_slots, observations, gs_sched)
+    gs_pct = gs_usage / length_of_night_in_mins(Site.GS,time_slots) * 100
+    gs_score = calculate_scheduling_score(Site.GS, time_slots, observations, sched)
     gs_summary = f'\tUsage: {gs_usage} mins, {gs_pct}%, Score: {gs_score}'
     print(gs_summary)
     #obs =  set([obs_idx for obs_idx in schedule if obs_idx is not None])
+
+def in_line_print(schedule):
+    sched = []
+    print('GS')
+    for i in schedule[Site.GS]:
+        if i:
+            sched.append(colored(i,'red'))
+        else:
+            sched.append('Free')
+    
+    print(' '.join(sched))
+    sched = []
+    print('GN')
+    for i in schedule[Site.GN]:
+        if i:
+            sched.append(colored(i,'red'))
+        else:
+            sched.append('Free')
+    print(' '.join(sched))
+    

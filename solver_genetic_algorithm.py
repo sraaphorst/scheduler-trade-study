@@ -21,26 +21,28 @@ if __name__ == '__main__':
     best_schedule = None
     schedule = None
     for i in range(num_runs):
-        ga = GeneticAlgortihm(time_slots, observations, include_greedy_max=False)
+        ga = GeneticAlgorithm(time_slots, observations, include_greedy_max=False)
         schedule = ga.run()
-        
-        join_schedule = schedule[0]+schedule[1]
-        score = calculate_schedule_score(time_slots, observations, join_schedule)
-        #gn_score = calculate_scheduling_score(Site.GN, time_slots, observations,
-        #                                      output.convert_to_scheduling(gn_schedule))
-
+        gs_score = calculate_scheduling_score(Site.GS, time_slots, observations,
+                                              output.convert_to_scheduling(schedule))
+        gn_score = calculate_scheduling_score(Site.GN, time_slots, observations,
+                                              output.convert_to_scheduling(schedule))
+        score = gn_score + gs_score
         # We have to schedule these pairwise, because otherwise we may get schedules where an observation is
         # scheduled at both sites: thus, for scoring, use the sum of the scores of the schedules to determine
         # the best schedule. We may move to a single pool of longer chromosomes similar to how we do things for ILP
         # instead of the way we do things now for GA with a pool for GS and GN, although this will making handling
         # Site.both observations more challenging. It will, on the other hand, simplify AND / OR.
         print(f'Final score: {score}')
+        input()
         #print(f'Final GN score: {gn_score}')
         if score > best_score:
             best_schedule = schedule
             best_score = score
-            print(f'Best schedule now: {best_schedule}')
-    
+            #print(f'Best schedule now: {best_schedule}')
+            print(f'Best schedule now:')
+            output.in_line_print(best_schedule)
+            input()
         tot_score += score
 
     total_time = monotonic() - start_time
@@ -50,6 +52,7 @@ if __name__ == '__main__':
     #print(f'Average GN score: {gn_tot_score / num_runs}')
     #print(f'Average total score: {(gn_tot_score + gs_tot_score) / num_runs}')
     print(f'Time taken: {total_time} s')
+    
     print(f'Average time per run: {total_time / num_runs} s')
     
     #print(schedule)
