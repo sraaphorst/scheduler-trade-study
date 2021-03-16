@@ -5,7 +5,7 @@ from common import *
 from random import choice, randrange, sample, shuffle
 from copy import copy
 from typing import List, Tuple, Union
-from output import calculate_schedule_score, calculate_scheduling_score
+from output import calculate_schedule_score, calculate_scheduling_score, convert_to_schedule
 from time_units import Time
 from itertools import groupby
 from termcolor import colored
@@ -187,31 +187,21 @@ class Chromosome:
         
         # Get the gaps into which we can insert.    
         start_time_slot_idx = self._get_first_gap(obs_idx, site)
+
+        assert(start_time_slot_idx not in [o[0] for o in self.scheduling[site]]) # Check if timeslot is already on used
         #print(f'obs site: {obs.site.name}, {site.name}, start_ts: {start_time_slot_idx}') 
         if start_time_slot_idx is None:
             
             # Check if the observation can be split in partial obs 
             partial_time_slot_idx, slots_needed = self._split_observation(obs_idx, site)
             if partial_time_slot_idx:
-                #print(f'{obs_idx} partially inserted')
-                # Add partials obs to the scheduling 
-                #print(partial_time_slots_idx,partial_lengths)
-                #print(f'Initial Schedule => {self.schedule[site]}')
-                #print(f'Initial Schedule => {self.schedule[site]}')
+
+                assert(partial_time_slot_idx not in [o[0] for o in self.scheduling[site]]) # Check if timeslot is already on used
+
                 self.scheduling[site].append((partial_time_slot_idx, obs_idx))
                 self.scheduling[site].sort()
                 self.schedule[site][partial_time_slot_idx:(partial_time_slot_idx 
                                                             + slots_needed)] = [obs_idx]* slots_needed
-                #for time_slot_idx, slots_needed in zip(partial_time_slots_idx,partial_lengths):
-                #    self.scheduling[site].append((time_slot_idx, obs_idx))
-                #    self.scheduling[site].sort()
-                #    self.schedule[site][time_slot_idx:(time_slot_idx + slots_needed)] = [obs_idx]* slots_needed
-                
-                #print(partial_time_slots_idx,partial_lengths)
-                #print(f'Final Schedule => {self.schedule[site]}')    
-                #x = input()
-                #return True
-            #print(f'{obs_idx} not inserted')
 
             return False
         #print(f'{obs_idx} inserted')
@@ -256,7 +246,8 @@ class Chromosome:
         return f'fitness: {self.determine_fitness():.6} '+ \
                  f'GS cap: {self.determine_capacity(Site.GS)}/{self.time_slots.num_time_slots_per_site[Site.GS]} '+ \
                  f'GN cap: {self.determine_capacity(Site.GN)}/{self.time_slots.num_time_slots_per_site[Site.GN]} '+ \
-                 f'\nSched: {self.scheduling}'
+                 f'\nGS Sched: {self.scheduling[Site.GS]}\nGN Sched: {self.scheduling[Site.GN]}'
+
     def __contains__(self, idx) -> bool:
         return True if idx in self.schedule[self.on_site] else False
 
@@ -324,28 +315,35 @@ class GeneticAlgorithm:
             self._sort_chromosomes()
             #input()
         #self._print_population()
-        #if self.include_greedy_max:
-        #     # Add Bryan's chromosome to the GA.
 
-        #    ggmx_out = {Site.GS: ['GN-2019A-FT-101-9', 'GS-2018B-Q-218-342', 'GN-2018B-Q-238-116',
-        #                          'GN-2019A-Q-903-71', 'GS-2018B-Q-224-34'], 
-        #                Site.GN: ['GN-2018B-Q-228-31', 'GS-2018B-Q-131-16',
-        #                          'GS-2018B-Q-207-62', 'GN-2019A-Q-229-9']}
-        #    gm_scheduling = {Site.GS: [], Site.GN: []}          
-        #    for obs in self.observations:
-        #        if obs.name in ggmx_out[obs.site]:
-        #            gm_scheduling[obs.site].append((,obs_idx))
-            
+        if self.include_greedy_max:
+        #     # Add Bryan's chromosome to the GA
+            print([o.name for o in self.observations])
+            gm_scheduling = [[(9,'GN-2019A-FT-101-9'), (168,'GS-2018B-Q-218-342'), 
+                              (277,'GN-2018B-Q-238-116'), (329,'GN-2019A-Q-903-71'), 
+                              (491,'GS-2018B-Q-224-34')], 
+                            [(281,'GN-2018B-Q-228-31'), (318,'GS-2018B-Q-201-28'),
+                             (425,'GS-2018B-Q-131-16'), (462,'GS-2018B-Q-207-62'), 
+                             (504,'GN-2019A-Q-229-9')]]
+         
+            for obs in self.observations:
+                sites = {Site.GN, Site.GS} if obs.site == Site.Both else {obs.site}
+                for site in sites:
+                    for i,t in enumerate(gm_scheduling[site]):
+                        if t[1] == obs.name:
+                           print(obs.idx)
+                           gm_scheduling[site][i]= (t[0],obs.idx)
+                           print(gm_scheduling[site][i])
+            print(gm_scheduling)
 
-        #    g1_scheduling = [gm_scheduling[Site.GS],gm_scheduling[Site.GN]]
-        #    g1_chromosome = Chromosome(self.time_slots, self.observations)
-        #    g1_chromosome.schedule = convert_to_schedule(self.time_slots, self.observations, g1_scheduling)
-        #    g1_chromosome.scheduling = g1_scheduling
-        #    self.chromosomes.append(b1_chromosome)
-        #    print(f'Greedy-max chromosome: fitness: {g1_chromosome.determine_fitness()}, '
-        #           f'score: {calculate_scheduling_score(self.time_slots, self.observations, b1_scheduling)}')
-        #
-        #   self._sort_chromosomes()
+        
+            g1_chromosome = Chromosome(self.time_slots, self.observations)
+            g1_chromosome.schedule = convert_to_schedule(self.time_slots, self.observations, gm_scheduling)
+            g1_chromosome.scheduling = gm_scheduling
+            self.chromosomes.append(g1_chromosome)
+            print(f'Greedy-max chromosome: fitness: {g1_chromosome.determine_fitness()}, '
+                   f'score: {calculate_scheduling_score(self.time_slots, self.observations, b1_scheduling)}')
+            self._sort_chromosomes()
 
     def _sort_chromosomes(self):
         self.chromosomes = sorted(self.chromosomes,
@@ -492,7 +490,8 @@ class GeneticAlgorithm:
         new_c = copy(c)
         for site in {Site.GN,Site.GS}:
 
-            c.on_site = new_c.on_site =site
+            c.on_site = new_c.on_site = site
+            
             if len(c) < 2:
                 return False
 
@@ -500,21 +499,26 @@ class GeneticAlgorithm:
             # This only works if the re-add switches the order.
             pos1, pos2 = sample(range(len(c)), 2)
             pos1, pos2 = (pos1, pos2) if pos1 > pos2 else (pos2, pos1)
-
-            new_c.remove(pos1, site)
-            new_c.remove(pos2, site)
-    
+            #print(f'swaping pos {pos1} {c[pos1]} for pos {pos2} {c[pos2]}')
+            new_c.remove(c[pos1], site)
+            #print(f'after removing {c[pos1]} {new_c}')
+            new_c.remove(c[pos2], site)
+            #print(f'after removing {c[pos2]} {new_c}')
             new_c.insert(c[pos2], site)
-            new_c.insert(c[pos1], Site)
+            #print(f'after inserting {c[pos2]} {new_c}')
+            new_c.insert(c[pos1], site)
+            #print(f'after inserting {c[pos1]} {new_c}')
  
             # if new_c.scheduling == c.scheduling:
             #     return False
 
         c.on_site = new_c.on_site = None
         #print("SWAP MUTATOR")
+        
         #print(f'old chromosome {c}')
         #print(f'new chromosome {new_c}')
         self.swaps += 1
+        #input()
         if new_c.determine_fitness() > c.determine_fitness() and not self._contains(new_c):
             self.chromosomes[c_idx] = new_c
             self._sort_chromosomes()

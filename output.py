@@ -4,24 +4,24 @@ from common import *
 from typing import Union
 from termcolor import colored
 
-def convert_to_schedule(site: Site,
-                        time_slots: TimeSlots,
+def convert_to_schedule(time_slots: TimeSlots,
                         observations: List[Observation],
                         scheduler: Union[None, Scheduling]) -> Union[None, Schedule]:
     """
     Convert scheduling to a schedule.
     """
-    schedule = []
-    for time_slot_idx, obs_idx in scheduler:
-        if len(schedule) > time_slot_idx:
-            raise ValueError(f'Observation {obs_idx} illegally scheduled at time slot {time_slot_idx}')
-        if len(schedule) < time_slot_idx:
-            schedule += [None] * (time_slot_idx - len(schedule))
-        obs = observations[obs_idx]
-        schedule += [obs_idx] * obs.time_slots_needed(time_slots)
-    if len(schedule) < time_slots.num_time_slots_per_site:
-        schedule += [None] * (time_slots.num_time_slots_per_site[site] - len(schedule))
-    return schedule
+    schedule = [[],[]]
+    for site in {Site.GS, Site.GS}:
+        for time_slot_idx, obs_idx in scheduler[site]:
+            if len(schedule[site]) > time_slot_idx:
+                raise ValueError(f'Observation {obs_idx} illegally scheduled at time slot {time_slot_idx}')
+            if len(schedule[site]) < time_slot_idx:
+                schedule[site] += [None] * (time_slot_idx - len(schedule[site]))
+            obs = observations[obs_idx]
+            schedule[site] += [obs_idx] * obs.time_slots_needed(time_slots)
+        if len(schedule[site]) < time_slots.num_time_slots_per_site:
+            schedule[site] += [None] * (time_slots.num_time_slots_per_site[site] - len(schedule[site]))
+        return schedule
 
 
 def convert_to_scheduling(schedule: Union[None, Schedule]) -> Union[None, Scheduling]:

@@ -35,7 +35,6 @@ Metric = float
 # For observations, a map from available time slot indices to metric
 Weights = Dict[int, Metric]
 
-ObservationsGroup = Dict[int, List[int]]
 
 # Define the sites.
 class Site(IntEnum):

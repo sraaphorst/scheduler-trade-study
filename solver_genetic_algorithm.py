@@ -72,4 +72,4 @@ if __name__ == '__main__':
     # Once print_schedule is implemented, delete the indicated area.
     print('\n\n')
     output.print_schedule3(time_slots, observations, best_schedule)
-
+    
