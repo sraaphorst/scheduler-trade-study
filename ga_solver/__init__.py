@@ -42,7 +42,7 @@ class Chromosome:
         if site not in {Site.Both, Site.GS, Site.GN}:
            raise ValueError("Site does not exit.")
         self.on_site = site
-
+    
     def _get_first_gap(self, obs_idx: int, site: int) -> Union[int, None]:
         """
         Given an observation index, if it can be scheduled in this chromosome (the sites are compatible), determine
@@ -135,15 +135,20 @@ class Chromosome:
                  unused_time_windows.append([unused_time_slots[i]])
 
         for tw in unused_time_windows:
-            if len(tw)*time_slot_length > 30: #check
+            #if len(tw)*time_slot_length > 30: #check
+            if obs.units.duration() > 30: # check if observation is longer than 30min 
                 slots_to_check = self.schedule[site][tw[0]:tw[-1]]
+                # the remaining observation also needs to be longer than 30 min
                 if set(slots_to_check) == {None} and (slots_needed - len(tw)) > 30:
-                    remaining_slots = slots_needed - len(tw)
-                    partial_obs = copy(obs)
-                    partial_obs.obs_time = Time(remaining_slots * time_slot_length)
-                    self.observations[obs_idx] = partial_obs
-                    self.partitions += 1
-                    return tw[0] , len(tw)
+                    if obs.units.reduce(len(tw)):
+                        obs.entirety = Entirety.Partial
+                        self.partitions += 1 
+                    #remaining_slots = slots_needed - len(tw)
+                    #partial_obs = copy(obs)
+                    #partial_obs.obs_time = Time(remaining_slots * time_slot_length)
+                    #self.observations[obs_idx] = partial_obs
+                    #self.partitions += 1
+                        return tw[0] , len(tw)
        
         return None, None
         
@@ -389,7 +394,7 @@ class GeneticAlgorithm:
         c4 = Chromosome(self.time_slots, self.observations)
         for site in {Site.GN,Site.GS}:
             
-            c1.on_site = c2.on_site = c3.on_site = c4.on_site = site
+            c1.on_site, c2.on_site, c3.on_site, c4.on_site = site, site, site, site
             
             # Pick a crossover point. We want some of each chromosome, so pick between [1, len-1].
             # If either is too short, we can't mate.
@@ -414,7 +419,7 @@ class GeneticAlgorithm:
                     c4.insert(c1[i], site)
             
         # Reset site variable
-        c1.on_site = c2.on_site = c3.on_site = c4.on_site = None 
+        c1.on_site, c2.on_site, c3.on_site, c4.on_site = None, None, None, None 
         
         #print('MATING PROCESS')
         #print('Chromosomes to interleave:')
@@ -453,13 +458,13 @@ class GeneticAlgorithm:
         c4 = Chromosome(self.time_slots, self.observations)
         # Interleave to produce the chromosomes.
         for site in {Site.GN,Site.GS}:
-            c1.on_site = c2.on_site = c3.on_site = c4.on_site = site
+            c1.on_site, c2.on_site, c3.on_site, c4.on_site = site, site, site, site
 
             for i in range(min(len(c1), len(c2))):
                 c3.insert(c1[i] if i % 2 == 0 and c1[i] not in c2 else c2[i], site)
                 c4.insert(c2[i] if i % 2 == 0 and c2[i] not in c1 else c1[i], site)
         
-        c1.on_site = c2.on_site = c3.on_site = c4.on_site = None 
+        c1.on_site, c2.on_site, c3.on_site, c4.on_site = None, None, None, None
 
         #print('INTERLEAVE PROCESS')
         #print('Chromosomes to interleave:')
@@ -490,7 +495,7 @@ class GeneticAlgorithm:
         new_c = copy(c)
         for site in {Site.GN,Site.GS}:
 
-            c.on_site = new_c.on_site = site
+            c.on_site, new_c.on_site = site, site
             
             if len(c) < 2:
                 return False
@@ -512,7 +517,7 @@ class GeneticAlgorithm:
             # if new_c.scheduling == c.scheduling:
             #     return False
 
-        c.on_site = new_c.on_site = None
+        c.on_site, new_c.on_site = None, None
         #print("SWAP MUTATOR")
         
         #print(f'old chromosome {c}')
@@ -536,7 +541,7 @@ class GeneticAlgorithm:
         new_c = copy(c)
 
         for site in {Site.GN,Site.GS}:
-            c.on_site = new_c.on_site = site
+            c.on_site, new_c.on_site = site, site
             #print(len(c))
              
             if len(c) <= 1:
@@ -558,7 +563,7 @@ class GeneticAlgorithm:
             for obs_idx in obs_idx_to_add:
                new_c.insert(obs_idx, site)
         
-        c.on_site = new_c.on_site = None
+        c.on_site, new_c.on_site = None, None
         #print("MIX MUTATOR")
         #print(f'old chromosome {c}')
         #print(f'new chromosome {new_c}')
