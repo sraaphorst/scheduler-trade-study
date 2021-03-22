@@ -187,23 +187,20 @@ class SchedulingUnits:
     def __init__(self, units: int, length: Time):
         self.units = units
         self.length = length
-        self.in_use = units 
+        self.in_use = self.units 
 
     def duration(self) -> Time:
-        return self.units*self.length.mins()
+        return self.in_use *self.length.mins()
     
     def reduce(self, amount: int) -> bool:
         if self.in_use < amount:
             return False
         
-        self.in_use -= amount
+        self.in_use = amount
         return True
 
-    def expand(self, amount: int) -> bool:
-        if self.units > amount:
-            return False
-        self.in_use += amount
-        return True
+    def expand(self) -> None:
+        self.in_use = self.units
 
 class Entirety(IntEnum):
 

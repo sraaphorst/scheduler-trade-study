@@ -72,9 +72,49 @@ class Chromosome:
                 [i for i in obs.start_slots if self.time_slots.num_time_slots_per_site[Site.GS] <= i])
        
         #print(f'min:{self._min_obs_slot_idx} max:{self._max_obs_slot_idx}')
+        if obs.entirety == Entirety.Partial:
+            # Check if the observation when expanded can be schedule
+            og_units = obs.units.in_use
+            obs.units.expand()
+            slots_needed = obs.time_slots_needed(self.time_slots)
+            offset = self.time_slots.num_time_slots_per_site[Site.GS] if site == Site.GN else 0
+            unused_time_slots = [time_slot_idx for time_slot_idx, obs_idx in enumerate(self.schedule[site]) if obs_idx is None
+                             and time_slot_idx + offset in range(self._min_obs_slot_idx, self._max_obs_slot_idx + 1)]
+            for time_slot_idx in unused_time_slots:
+                # Check to see if we have slots_needed empty slots starting at time_slot_idx.
+                slots_to_check = self.schedule[site][time_slot_idx:(time_slot_idx + slots_needed)]
+                if set(slots_to_check) == {None} and len(slots_to_check) == slots_needed:
+                    return time_slot_idx
+            
+            #return to original
+            obs.units.reduce(og_units) 
+            
+        slots_needed = obs.time_slots_needed(self.time_slots)
+        
+
+        # Get the sorted indices of the unused time_slots that we can use for scheduling this observation.
+        # TODO: WE NEED TO OFFSET TIME_SLOT_IDX BY THE OFFSET, IN THIS CASE
+        offset = self.time_slots.num_time_slots_per_site[Site.GS] if site == Site.GN else 0
+        
+        unused_time_slots = [time_slot_idx for time_slot_idx, obs_idx in enumerate(self.schedule[site]) if obs_idx is None
+                             and time_slot_idx + offset in range(self._min_obs_slot_idx, self._max_obs_slot_idx + 1)]
+        #print('*** unused slots process ***')
+  
+        #print([(time_slot_idx,time_slot_idx+offset) for time_slot_idx, obs_idx in enumerate(self.schedule[site]) if obs_idx is None])
+        #print('*** END slots process ***')
+        #print(f'unused_time_slots: {unused_time_slots}')
+        # Now iterate over the unused time slots and determine if this observation can be inserted in the position.
+        for time_slot_idx in unused_time_slots:
+            # Check to see if we have slots_needed empty slots starting at time_slot_idx.
+            slots_to_check = self.schedule[site][time_slot_idx:(time_slot_idx + slots_needed)]
+
+            if set(slots_to_check) == {None} and len(slots_to_check) == slots_needed:
+                return time_slot_idx
 
         # Determine the number of time_slots we need to accommodate this observation.
+        
         slots_needed = obs.time_slots_needed(self.time_slots)
+        
 
         # Get the sorted indices of the unused time_slots that we can use for scheduling this observation.
         # TODO: WE NEED TO OFFSET TIME_SLOT_IDX BY THE OFFSET, IN THIS CASE
@@ -186,15 +226,18 @@ class Chromosome:
             return False
         
         #Check for the obs in both sites so its not duplicated or if 
-        for s in {Site.GS, Site.GN}:
+        for s in {Site.GS, Site.GN}: 
             if obs_idx in self.schedule[s]: # TODO: Must change this
                 return False
         
-        # Get the gaps into which we can insert.    
+           
+              
+        # Get the gaps into which we can insert. 
         start_time_slot_idx = self._get_first_gap(obs_idx, site)
 
-        assert(start_time_slot_idx not in [o[0] for o in self.scheduling[site]]) # Check if timeslot is already on used
+        assert(start_time_slot_idx not in [o[0] for o in self.scheduling[site]]) # Check if timeslot is already on used\
         #print(f'obs site: {obs.site.name}, {site.name}, start_ts: {start_time_slot_idx}') 
+            
         if start_time_slot_idx is None:
             
             # Check if the observation can be split in partial obs 
