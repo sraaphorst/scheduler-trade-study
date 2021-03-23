@@ -1,0 +1,21 @@
+Tasks to do:
+1. Update Gurobi code to work with new Gurobi version and to mirror changes in CBC ILP.
+
+2. Repair ilp_solver/__init__.py to use Gurobi as the default ILP solver.
+
+3. Get OR clauses working.
+
+Thoughts:
+1. ILPs have limitations in: timeslot / hour angle integration and partial scheduling.
+
+2. ILPs will likely make AND / OR much easier, if we can make variables dependent on the values of other variables.
+ORs should be doable with GA, but much harder to enforce. Do we filter at end or make sure during the GA that any
+schedule without one of the OR observations in it dies? Since we are scheduling GS + GN separately, this might be
+very difficult. We might want to join into one schedule, like ILPs have, with a boundary where the split is between
+the GN and GS time slots. This will require significant changes and will lead to less chromosomes, which may be
+detrimental, but it would fix the issue of one site getting a benefit over the other site.
+
+3. The bookkeeping with partial scheduling with GAs will be very difficult, especially when it comes to the chromosome
+operations.
+
+4. Get the proper sum of schedules as per talk with Bryan.
