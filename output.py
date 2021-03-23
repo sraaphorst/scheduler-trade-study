@@ -3,6 +3,7 @@
 from common import *
 from typing import Union
 from termcolor import colored
+from tabulate import tabulate
 
 def convert_to_schedule(time_slots: TimeSlots,
                         observations: List[Observation],
@@ -22,7 +23,6 @@ def convert_to_schedule(time_slots: TimeSlots,
         if len(schedule[site]) < time_slots.num_time_slots_per_site:
             schedule[site] += [None] * (time_slots.num_time_slots_per_site[site] - len(schedule[site]))
         return schedule
-
 
 def convert_to_scheduling(schedule: Union[None, Schedule]) -> Union[None, Scheduling]:
     """
@@ -126,11 +126,56 @@ def print_schedule(site: Site, time_slots: TimeSlots, observations: List[Observa
     :param schedule: the schedule, a list of length time_slots.number_of_time_slots_per_site
     """
     if schedule is None:
-        return
+        return None
 
     scheduling = convert_to_scheduling(schedule)
-    score = calculate_scheduling_score(site, time_slots, observations, scheduling)
-    length_of_night = length_of_night_in_mins(site, time_slots)
+
+    if scheduling is None:
+        return None
+    
+    score = calculate_score(time_slots, observations, scheduling)
+    total_time = time_slots.time_slot_length.mins() * time_slots.num_time_slots_per_site
+
+
+    o_array = []
+    previous_end = 0.0
+
+    for time_slot_idx, observation_index in scheduling:
+        observation = observations[observation_index]
+        start = time_slots.get_time_slot(site, time_slot_idx).start_time.mins()
+        length = round(observation.obs_time.mins(),3)
+        end =  start + length
+        hap = round(observation.start_slot_map[time_slot_idx],6)
+        total_priority = observation.priority * observation.start_slot_map[time_slot_idx] * observation.obs_time.mins() / length
+
+        gap = 'No' 
+        if (start - previous_end) > time_slots.time_slot_length.mins():
+            gap = start - previous_end
+
+        o_array.append([observation.name, 
+                    observation.band, 
+                    start,
+                    length,
+                    end,
+                    observation.priority,
+                    hap,
+                    total_priority,
+                    gap
+                    ]) 
+        previous_end = end
+
+    output = tabulate(o_array, headers=['Observation',
+                                        'Band',
+                                        'Start',
+                                        'Length',
+                                        'End',
+                                        'Priority', 
+                                        'HAP', 
+                                        'Total Priority', 
+                                        'Gap'])
+
+    print(output)
+    
 
     # TODO: Now scheduling will have entries of the form (time_slot_index, observation_index)
     # TODO: Here you should iterate over scheduling and output something along the lines of an aligned table like:
